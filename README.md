@@ -142,8 +142,10 @@ workspace/agent-dashboard-v2/
     }
   }
 }
-```
 
+
+```
+<img width="2505" height="1371" alt="截图 2026-03-28 16-41-28 (Edited)" src="https://github.com/user-attachments/assets/d9bc91e9-cac7-4133-bd9b-e46c749f46a7" />
 ## 🔌 API 端点
 
 ### Agent 管理（新增）
