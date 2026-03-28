@@ -903,29 +903,40 @@ let draggedName = null;
 
 const initDragAndDrop = () => {
     const grid = document.getElementById('agentGrid');
-    if (!grid) return;
+    if (!grid) {
+        console.log('[Drag] Grid not found');
+        return;
+    }
     
     // Don't enable drag in list mode
     if (state.viewMode === 'list') {
+        console.log('[Drag] List mode - drag disabled');
         grid.classList.remove('drag-enabled');
         return;
     }
     
+    console.log('[Drag] Initializing, viewMode:', state.viewMode);
     grid.classList.add('drag-enabled');
     
     const cards = grid.querySelectorAll('.agent-card');
-    console.log('[Drag] Setting up', cards.length, 'cards');
+    console.log('[Drag] Found', cards.length, 'cards');
     
-    cards.forEach((card) => {
+    cards.forEach((card, index) => {
         // Skip if already initialized
-        if (card.dataset.dragInitialized === 'true') return;
+        if (card.dataset.dragInitialized === 'true') {
+            console.log('[Drag] Card', index, 'already initialized');
+            return;
+        }
         
         // Enable draggable
         card.draggable = true;
         card.dataset.dragInitialized = 'true';
         
+        console.log('[Drag] Setup card', index, ':', card.dataset.agentName, 'draggable:', card.draggable);
+        
         // Drag Start
         card.addEventListener('dragstart', function(e) {
+            console.log('[Drag] dragstart event fired for:', this.dataset.agentName);
             isDragging = true;
             draggedCard = this;
             draggedName = this.dataset.agentName;
@@ -939,6 +950,7 @@ const initDragAndDrop = () => {
         
         // Drag End - Save final order
         card.addEventListener('dragend', function(e) {
+            console.log('[Drag] dragend event fired for:', this.dataset.agentName);
             isDragging = false;
             this.classList.remove('dragging');
             
@@ -1013,6 +1025,7 @@ const initDragAndDrop = () => {
 // Hook into renderAgentCards
 const _originalRender = renderAgentCards;
 renderAgentCards = function() {
+    console.log('[Render] renderAgentCards called');
     _originalRender();
     
     // Apply custom order if exists
@@ -1036,9 +1049,11 @@ renderAgentCards = function() {
     }
     
     // Initialize drag and drop after render
+    console.log('[Render] Scheduling initDragAndDrop, viewMode:', state.viewMode);
     setTimeout(() => {
+        console.log('[Render] Calling initDragAndDrop');
         initDragAndDrop();
-    }, 200);
+    }, 300);
 };
 
 // Modify loadData to load view preference
