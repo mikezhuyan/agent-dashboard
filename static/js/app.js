@@ -985,8 +985,8 @@ const initDragAndDrop = () => {
             this.classList.add('dragging');
         });
         
-        // Drag End - Save final order (debounced)
-        card.addEventListener('dragend', function(e) {
+        // Drag End - Save final order immediately
+        card.addEventListener('dragend', async function(e) {
             const cardName = this.dataset.agentName;
             console.log('[Drag] dragend:', cardName);
             isDragging = false;
@@ -996,21 +996,14 @@ const initDragAndDrop = () => {
                 c.classList.remove('drag-over');
             });
             
-            // Update order immediately, but save with debounce
-            console.log('[Drag] Calling updateAgentOrder and saveAgentOrder');
-            updateAgentOrder();
-            
-            // Clear previous timeout and set new one
-            if (saveOrderTimeout) {
-                clearTimeout(saveOrderTimeout);
-            }
-            saveOrderTimeout = setTimeout(() => {
-                saveAgentOrder();
-                saveOrderTimeout = null;
-            }, 100); // Small delay to batch rapid changes
-            
-            draggedCard = null;
-            draggedName = null;
+            // Small delay to ensure DOM is settled, then update and save
+            console.log('[Drag] Will update and save order...');
+            setTimeout(async () => {
+                updateAgentOrder();
+                await saveAgentOrder();
+                draggedCard = null;
+                draggedName = null;
+            }, 50);
         });
         
         // Drag Over - Real-time swap (simplified)
@@ -1099,9 +1092,16 @@ const updateAgentOrder = () => {
         console.log('[Drag] Grid not found!');
         return;
     }
-    const cards = grid.querySelectorAll('.agent-card');
+    // Get cards in their current DOM order
+    const cards = Array.from(grid.children).filter(el => el.classList.contains('agent-card'));
     console.log('[Drag] Found', cards.length, 'cards in grid');
-    state.agentOrder = Array.from(cards).map(card => card.dataset.agentName);
+    
+    // Log each card's position for debugging
+    cards.forEach((card, i) => {
+        console.log(`[Drag] Card ${i}: ${card.dataset.agentName}`);
+    });
+    
+    state.agentOrder = cards.map(card => card.dataset.agentName);
     console.log('[Drag] Order updated:', state.agentOrder);
 };
 
@@ -1112,7 +1112,16 @@ const saveAgentOrder = async () => {
             agent_order: state.agentOrder
         });
         console.log('[Drag] Order saved, result:', result);
+        
+        // Verify save was successful
+        if (result && result.success) {
+            console.log('[Drag] Save confirmed successful');
+        } else {
+            console.error('[Drag] Save returned unsuccessful:', result);
+        }
+        return result;
     } catch (e) {
         console.error('[Drag] Failed to save order:', e);
+        throw e;
     }
 };
