@@ -1110,11 +1110,66 @@ h1 {
     box-shadow: var(--glow-green);
 }
 
+/* Current Model Display */
+.current-model {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    padding: 4px 10px;
+    background: rgba(168, 85, 247, 0.15);
+    border: 1px solid rgba(168, 85, 247, 0.3);
+    border-radius: 20px;
+    font-size: 0.75rem;
+    color: var(--accent-purple);
+    font-weight: 500;
+    width: fit-content;
+}
+
+.agent-card.running .current-model {
+    background: rgba(0, 212, 255, 0.15);
+    border-color: rgba(0, 212, 255, 0.3);
+    color: var(--accent-cyan);
+    animation: pulseModel 2s ease-in-out infinite;
+}
+
+@keyframes pulseModel {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+.model-icon {
+    font-size: 0.9rem;
+}
+
+.model-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 150px;
+}
+
 /* Form Enhancements */
 .form-hint {
     font-size: 0.75rem;
     color: var(--text-muted);
     margin-top: 4px;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+}
+
+.checkbox-label input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    accent-color: var(--accent-cyan);
+    cursor: pointer;
 }
 
 .required {

@@ -434,11 +434,28 @@ def get_stats():
         agent_session_count = 0
         agent_running = False
         
+        current_model = None
+        current_model_provider = None
+        latest_session = None
+        
         if sessions_path:
             try:
                 with open(sessions_path, 'r', encoding='utf-8') as f:
                     sessions = json.load(f)
                 
+                # 找到最新的会话
+                if sessions:
+                    latest_session = max(sessions.values(), 
+                                        key=lambda s: s.get('updatedAt', 0))
+                    current_model = latest_session.get('model')
+                    current_model_provider = latest_session.get('modelProvider')
+                    
+                    # 只基于最新会话判断运行状态
+                    if latest_session.get('status') == 'running':
+                        agent_running = True
+                        running_agents += 1
+                
+                # 统计所有会话的 token 使用量
                 for session_key, session_data in sessions.items():
                     input_t = session_data.get('inputTokens', 0)
                     output_t = session_data.get('outputTokens', 0)
@@ -450,10 +467,6 @@ def get_stats():
                     agent_cache += cache_r + cache_w
                     agent_tokens += session_data.get('totalTokens', 0)
                     agent_session_count += 1
-                    
-                    if session_data.get('status') == 'running':
-                        agent_running = True
-                        running_agents += 1
             
             except Exception as e:
                 print(f"Error processing sessions for {agent_name}: {e}")
@@ -467,6 +480,13 @@ def get_stats():
         # 计算该agent的成本
         agent_cost = config_manager.calculate_cost(agent_input, agent_output, 0, agent_cache)
         
+        # 格式化当前模型显示
+        current_model_display = None
+        if current_model and current_model_provider:
+            current_model_display = f"{current_model_provider}/{current_model}"
+        elif current_model:
+            current_model_display = current_model
+        
         stats_by_agent[agent_name] = {
             'tokens': agent_tokens,
             'inputTokens': agent_input,
@@ -474,13 +494,25 @@ def get_stats():
             'cacheTokens': agent_cache,
             'sessions': agent_session_count,
             'isRunning': agent_running,
-            'estimatedCost': agent_cost
+            'estimatedCost': agent_cost,
+            'currentModel': current_model_display,
+            'currentModelProvider': current_model_provider,
+            'currentModelName': current_model
         }
     
     # 计算总成本
-    total_cost = config_manager.calculate_cost(
-        total_input_tokens, total_output_tokens, 0, total_cache_tokens
-    )
+    show_cost = config_manager.get().get("show_cost_estimates", True)
+    
+    total_cost = None
+    if show_cost:
+        total_cost = config_manager.calculate_cost(
+            total_input_tokens, total_output_tokens, 0, total_cache_tokens
+        )
+    
+    # 如果不需要显示费用，从每个 agent 的统计中移除
+    if not show_cost:
+        for agent_stats in stats_by_agent.values():
+            agent_stats['estimatedCost'] = None
     
     return jsonify({
         'totalTokens': total_tokens,

@@ -252,6 +252,12 @@ const renderAgentCards = () => {
                         <span class="status-badge ${isRunning ? 'running' : 'idle'}">
                             ${isRunning ? '●' : '○'} ${isRunning ? '运行中' : '已结束'}
                         </span>
+                        <div class="current-model" id="model-${agent.name}">
+                            ${agentStats.currentModel ? `
+                                <span class="model-icon">🤖</span>
+                                <span class="model-name">${agentStats.currentModel}</span>
+                            ` : '<span class="model-name">未运行</span>'}
+                        </div>
                     </div>
                 </div>
             </div>
