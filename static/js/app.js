@@ -214,7 +214,7 @@ const renderStats = (stats) => {
     document.getElementById('statsOverview').innerHTML = html;
 };
 
-const renderAgentCards = () => {
+let renderAgentCards = () => {
     const grid = document.getElementById('agentGrid');
     grid.innerHTML = '';
     
@@ -580,7 +580,7 @@ window.handleDrop = (e) => {
 };
 
 // Data loading
-const loadData = async () => {
+let loadData = async () => {
     try {
         // Load config if not loaded
         if (!state.config) {
