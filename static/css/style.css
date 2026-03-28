@@ -113,6 +113,50 @@ header {
     margin-bottom: 10px;
 }
 
+.view-switcher {
+    display: flex;
+    gap: 8px;
+}
+
+.view-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: var(--transition-base);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.view-btn:hover {
+    background: var(--bg-card-hover);
+    color: var(--text-primary);
+}
+
+.view-btn.active {
+    background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+    color: white;
+    border-color: transparent;
+}
+
+.header-actions {
+    display: flex;
+    gap: 12px;
+}
+
+.sort-hint {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    margin-bottom: 15px;
+    opacity: 0.7;
+}
+
 .logo {
     display: flex;
     align-items: center;
@@ -1232,4 +1276,182 @@ h1 {
 .agent-delete-btn:hover {
     background: var(--accent-red);
     color: white;
+}
+
+/* ========================================
+   View Modes - Grid Horizontal & List
+   ======================================== */
+
+/* Grid Horizontal Mode */
+.agent-grid.grid-horizontal {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(500px, 1fr));
+}
+
+.agent-grid.grid-horizontal .agent-card {
+    display: flex;
+    flex-direction: row;
+    min-height: auto;
+}
+
+.agent-grid.grid-horizontal .agent-header {
+    width: 180px;
+    flex-shrink: 0;
+    border-radius: 24px 0 0 24px;
+}
+
+.agent-grid.grid-horizontal .agent-identity {
+    flex-direction: column;
+    text-align: center;
+}
+
+.agent-grid.grid-horizontal .agent-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.agent-grid.grid-horizontal .token-stats {
+    justify-content: flex-start;
+}
+
+/* List Mode */
+.agent-grid.list-view {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.agent-grid.list-view .agent-card {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    padding: 16px 20px;
+    min-height: auto;
+}
+
+.agent-grid.list-view .agent-header {
+    width: auto;
+    background: none;
+    padding: 0;
+}
+
+.agent-grid.list-view .agent-identity {
+    flex-direction: row;
+}
+
+.agent-grid.list-view .avatar {
+    width: 48px;
+    height: 48px;
+    font-size: 24px;
+}
+
+.agent-grid.list-view .agent-info {
+    min-width: 150px;
+}
+
+.agent-grid.list-view .agent-name {
+    font-size: 1.1rem;
+}
+
+.agent-grid.list-view .agent-role {
+    font-size: 0.75rem;
+}
+
+.agent-grid.list-view .agent-body {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 20px;
+    flex: 1;
+    padding: 0;
+}
+
+.agent-grid.list-view .token-section {
+    margin: 0;
+    flex: 1;
+}
+
+.agent-grid.list-view .token-bar-container {
+    padding: 10px 14px;
+}
+
+.agent-grid.list-view .token-header {
+    margin-bottom: 6px;
+}
+
+.agent-grid.list-view .token-value {
+    font-size: 1.2rem;
+}
+
+.agent-grid.list-view .current-model {
+    margin: 0;
+}
+
+.agent-grid.list-view .task-section,
+.agent-grid.list-view .time-window,
+.agent-grid.list-view .model-badge {
+    display: none;
+}
+
+.agent-grid.list-view .token-progress {
+    height: 6px;
+}
+
+/* Drag and Drop Styles */
+.agent-card {
+    cursor: grab;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.agent-card:active {
+    cursor: grabbing;
+}
+
+.agent-card.dragging {
+    opacity: 0.5;
+    transform: scale(0.95);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+}
+
+.agent-card.drag-over {
+    border: 2px dashed var(--accent-cyan);
+    transform: translateY(5px);
+}
+
+.agent-grid.drag-enabled .agent-card {
+    position: relative;
+}
+
+.agent-grid.drag-enabled .agent-card::before {
+    content: '⋮⋮';
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    color: var(--text-muted);
+    font-size: 12px;
+    letter-spacing: 2px;
+    opacity: 0.5;
+    cursor: grab;
+}
+
+/* Responsive for view modes */
+@media (max-width: 768px) {
+    .agent-grid.grid-horizontal {
+        grid-template-columns: 1fr;
+    }
+    
+    .agent-grid.grid-horizontal .agent-card {
+        flex-direction: column;
+    }
+    
+    .agent-grid.grid-horizontal .agent-header {
+        width: auto;
+        border-radius: 24px 24px 0 0;
+    }
+    
+    .view-switcher {
+        display: none;
+    }
 }

@@ -65,7 +65,9 @@ class ConfigManager:
                 "color": "investor",
                 "description": "投资分析与市场研究"
             }
-        }
+        },
+        "view_mode": "grid",  # grid, grid-horizontal, list
+        "agent_order": []  # 自定义排序，空数组表示按默认顺序
     }
     
     def __init__(self, config_path: Optional[str] = None):

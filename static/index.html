@@ -16,14 +16,27 @@
     <div class="container">
         <header>
             <div class="header-top">
-                <button class="settings-btn create-agent-btn" onclick="openCreateAgentModal()">
-                    <span>➕</span>
-                    <span>新建 Agent</span>
-                </button>
-                <button class="settings-btn" onclick="openSettings()">
-                    <span>⚙️</span>
-                    <span>设置</span>
-                </button>
+                <div class="view-switcher">
+                    <button class="view-btn active" onclick="switchView('grid')" title="卡片视图">
+                        <span>⊞</span>
+                    </button>
+                    <button class="view-btn" onclick="switchView('grid-horizontal')" title="横向卡片">
+                        <span>⊟</span>
+                    </button>
+                    <button class="view-btn" onclick="switchView('list')" title="列表视图">
+                        <span>☰</span>
+                    </button>
+                </div>
+                <div class="header-actions">
+                    <button class="settings-btn create-agent-btn" onclick="openCreateAgentModal()">
+                        <span>➕</span>
+                        <span>新建 Agent</span>
+                    </button>
+                    <button class="settings-btn" onclick="openSettings()">
+                        <span>⚙️</span>
+                        <span>设置</span>
+                    </button>
+                </div>
             </div>
             <div class="logo">
                 <div class="logo-icon">🤖</div>
@@ -40,6 +53,9 @@
             </div>
         </div>
 
+        <div class="sort-hint" id="sortHint">
+            <span>💡 提示：拖动卡片可以调整排序</span>
+        </div>
         <div class="agent-grid" id="agentGrid">
             <!-- Agent cards will be inserted here -->
         </div>

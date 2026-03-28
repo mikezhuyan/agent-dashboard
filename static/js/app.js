@@ -9,7 +9,10 @@ const state = {
     stats: null,
     selectedAgent: null,
     refreshInterval: null,
-    currentTab: 'general'
+    currentTab: 'general',
+    viewMode: 'grid', // grid, grid-horizontal, list
+    agentOrder: [],
+    dragEnabled: true
 };
 
 // Utility functions
@@ -233,6 +236,7 @@ const renderAgentCards = () => {
         
         const card = document.createElement('div');
         card.className = `agent-card ${isRunning ? 'running' : ''}`;
+        card.dataset.agentName = agent.name;
         card.innerHTML = `
             <div class="agent-header">
                 <div class="agent-identity">
@@ -805,4 +809,224 @@ window.createAgent = async () => {
     } catch (e) {
         showNotification('创建失败: ' + e.message, 'error');
     }
+};
+
+
+// ========================================
+// View Mode Switching
+// ========================================
+
+window.switchView = (mode) => {
+    state.viewMode = mode;
+    
+    // Update UI
+    document.querySelectorAll('.view-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    event.target.closest('.view-btn').classList.add('active');
+    
+    // Update grid class
+    const grid = document.getElementById('agentGrid');
+    grid.className = 'agent-grid';
+    
+    if (mode === 'grid-horizontal') {
+        grid.classList.add('grid-horizontal');
+    } else if (mode === 'list') {
+        grid.classList.add('list-view');
+    }
+    
+    // Show/hide sort hint
+    const hint = document.getElementById('sortHint');
+    if (hint) {
+        hint.style.display = mode === 'list' ? 'none' : 'block';
+    }
+    
+    // Save preference
+    saveViewPreference();
+};
+
+const saveViewPreference = async () => {
+    try {
+        await api.updateConfig({
+            view_mode: state.viewMode,
+            agent_order: state.agentOrder
+        });
+    } catch (e) {
+        console.error('Failed to save view preference:', e);
+    }
+};
+
+const loadViewPreference = () => {
+    if (state.config) {
+        state.viewMode = state.config.view_mode || 'grid';
+        state.agentOrder = state.config.agent_order || [];
+        
+        // Apply view mode
+        const grid = document.getElementById('agentGrid');
+        if (grid) {
+            grid.className = 'agent-grid';
+            if (state.viewMode === 'grid-horizontal') {
+                grid.classList.add('grid-horizontal');
+            } else if (state.viewMode === 'list') {
+                grid.classList.add('list-view');
+            }
+        }
+        
+        // Update view buttons
+        document.querySelectorAll('.view-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        const activeBtn = document.querySelector(`.view-btn[onclick*="'${state.viewMode}'"]`);
+        if (activeBtn) activeBtn.classList.add('active');
+        
+        // Update sort hint
+        const hint = document.getElementById('sortHint');
+        if (hint) {
+            hint.style.display = state.viewMode === 'list' ? 'none' : 'block';
+        }
+    }
+};
+
+// ========================================
+// Drag and Drop Sorting
+// ========================================
+
+let draggedElement = null;
+let draggedAgentName = null;
+
+const initDragAndDrop = () => {
+    const grid = document.getElementById('agentGrid');
+    if (!grid || state.viewMode === 'list') return;
+    
+    grid.classList.add('drag-enabled');
+    
+    const cards = grid.querySelectorAll('.agent-card');
+    cards.forEach(card => {
+        card.draggable = true;
+        card.addEventListener('dragstart', handleDragStart);
+        card.addEventListener('dragend', handleDragEnd);
+        card.addEventListener('dragover', handleDragOver);
+        card.addEventListener('drop', handleDrop);
+        card.addEventListener('dragenter', handleDragEnter);
+        card.addEventListener('dragleave', handleDragLeave);
+    });
+};
+
+const handleDragStart = (e) => {
+    draggedElement = e.target.closest('.agent-card');
+    draggedAgentName = draggedElement.dataset.agentName;
+    
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', draggedAgentName);
+    
+    draggedElement.classList.add('dragging');
+    
+    // Disable auto-refresh during drag
+    if (state.refreshInterval) {
+        clearInterval(state.refreshInterval);
+    }
+};
+
+const handleDragEnd = (e) => {
+    if (draggedElement) {
+        draggedElement.classList.remove('dragging');
+    }
+    
+    document.querySelectorAll('.agent-card').forEach(card => {
+        card.classList.remove('drag-over');
+    });
+    
+    draggedElement = null;
+    draggedAgentName = null;
+    
+    // Re-enable auto-refresh
+    startAutoRefresh();
+};
+
+const handleDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+};
+
+const handleDragEnter = (e) => {
+    e.preventDefault();
+    const card = e.target.closest('.agent-card');
+    if (card && card !== draggedElement) {
+        card.classList.add('drag-over');
+    }
+};
+
+const handleDragLeave = (e) => {
+    const card = e.target.closest('.agent-card');
+    if (card) {
+        card.classList.remove('drag-over');
+    }
+};
+
+const handleDrop = (e) => {
+    e.preventDefault();
+    
+    const targetCard = e.target.closest('.agent-card');
+    if (!targetCard || targetCard === draggedElement) return;
+    
+    const targetAgentName = targetCard.dataset.agentName;
+    
+    // Update order
+    const grid = document.getElementById('agentGrid');
+    const cards = Array.from(grid.querySelectorAll('.agent-card'));
+    const draggedIndex = cards.indexOf(draggedElement);
+    const targetIndex = cards.indexOf(targetCard);
+    
+    if (draggedIndex < targetIndex) {
+        targetCard.after(draggedElement);
+    } else {
+        targetCard.before(draggedElement);
+    }
+    
+    // Update state and save
+    updateAgentOrder();
+    saveViewPreference();
+    
+    targetCard.classList.remove('drag-over');
+};
+
+const updateAgentOrder = () => {
+    const grid = document.getElementById('agentGrid');
+    const cards = grid.querySelectorAll('.agent-card');
+    state.agentOrder = Array.from(cards).map(card => card.dataset.agentName);
+};
+
+// Override renderAgentCards to support sorting
+const originalRenderAgentCards = renderAgentCards;
+renderAgentCards = () => {
+    originalRenderAgentCards();
+    
+    // Apply custom order if exists
+    if (state.agentOrder.length > 0) {
+        const grid = document.getElementById('agentGrid');
+        const cards = Array.from(grid.querySelectorAll('.agent-card'));
+        
+        cards.sort((a, b) => {
+            const aIndex = state.agentOrder.indexOf(a.dataset.agentName);
+            const bIndex = state.agentOrder.indexOf(b.dataset.agentName);
+            if (aIndex === -1) return 1;
+            if (bIndex === -1) return -1;
+            return aIndex - bIndex;
+        });
+        
+        cards.forEach(card => grid.appendChild(card));
+    }
+    
+    // Initialize drag and drop
+    setTimeout(initDragAndDrop, 100);
+};
+
+// Modify loadData to load view preference
+const originalLoadData = loadData;
+loadData = async () => {
+    const result = await originalLoadData();
+    if (result) {
+        loadViewPreference();
+    }
+    return result;
 };
