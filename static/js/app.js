@@ -936,21 +936,22 @@ const initDragAndDrop = () => {
         
         // Drag Start
         card.addEventListener('dragstart', function(e) {
-            console.log('[Drag] dragstart event fired for:', this.dataset.agentName);
+            const cardName = this.dataset.agentName;
+            console.log('[Drag] dragstart:', cardName);
             isDragging = true;
             draggedCard = this;
-            draggedName = this.dataset.agentName;
+            draggedName = cardName;
             
             e.dataTransfer.effectAllowed = 'move';
-            e.dataTransfer.setData('text/plain', draggedName);
+            e.dataTransfer.setData('text/plain', cardName);
             
             this.classList.add('dragging');
-            console.log('[Drag] Start:', draggedName);
         });
         
         // Drag End - Save final order
         card.addEventListener('dragend', function(e) {
-            console.log('[Drag] dragend event fired for:', this.dataset.agentName);
+            const cardName = this.dataset.agentName;
+            console.log('[Drag] dragend:', cardName);
             isDragging = false;
             this.classList.remove('dragging');
             
@@ -959,10 +960,10 @@ const initDragAndDrop = () => {
             });
             
             // Save order only at the end
+            console.log('[Drag] Calling updateAgentOrder and saveAgentOrder');
             updateAgentOrder();
             saveAgentOrder();
             
-            console.log('[Drag] End:', draggedName);
             draggedCard = null;
             draggedName = null;
         });
@@ -1068,19 +1069,25 @@ loadData = async () => {
 
 // Update and save agent order
 const updateAgentOrder = () => {
+    console.log('[Drag] Updating order...');
     const grid = document.getElementById('agentGrid');
-    if (!grid) return;
+    if (!grid) {
+        console.log('[Drag] Grid not found!');
+        return;
+    }
     const cards = grid.querySelectorAll('.agent-card');
+    console.log('[Drag] Found', cards.length, 'cards in grid');
     state.agentOrder = Array.from(cards).map(card => card.dataset.agentName);
     console.log('[Drag] Order updated:', state.agentOrder);
 };
 
 const saveAgentOrder = async () => {
+    console.log('[Drag] Saving order...', state.agentOrder);
     try {
-        await api.updateConfig({
+        const result = await api.updateConfig({
             agent_order: state.agentOrder
         });
-        console.log('[Drag] Order saved');
+        console.log('[Drag] Order saved, result:', result);
     } catch (e) {
         console.error('[Drag] Failed to save order:', e);
     }
