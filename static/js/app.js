@@ -895,7 +895,7 @@ const loadViewPreference = () => {
 };
 
 // ========================================
-// Drag and Drop Sorting
+// Drag and Drop Sorting (Real-time swap)
 // ========================================
 
 let draggedCard = null;
@@ -916,7 +916,7 @@ const initDragAndDrop = () => {
     const cards = grid.querySelectorAll('.agent-card');
     console.log('[Drag] Setting up', cards.length, 'cards');
     
-    cards.forEach((card, index) => {
+    cards.forEach((card) => {
         // Skip if already initialized
         if (card.dataset.dragInitialized === 'true') return;
         
@@ -924,7 +924,7 @@ const initDragAndDrop = () => {
         card.draggable = true;
         card.dataset.dragInitialized = 'true';
         
-        // Add listeners using anonymous functions to avoid reference issues
+        // Drag Start
         card.addEventListener('dragstart', function(e) {
             isDragging = true;
             draggedCard = this;
@@ -937,6 +937,7 @@ const initDragAndDrop = () => {
             console.log('[Drag] Start:', draggedName);
         });
         
+        // Drag End - Save final order
         card.addEventListener('dragend', function(e) {
             isDragging = false;
             this.classList.remove('dragging');
@@ -945,45 +946,64 @@ const initDragAndDrop = () => {
                 c.classList.remove('drag-over');
             });
             
+            // Save order only at the end
+            updateAgentOrder();
+            saveAgentOrder();
+            
             console.log('[Drag] End:', draggedName);
             draggedCard = null;
             draggedName = null;
         });
         
+        // Drag Over - Real-time swap
         card.addEventListener('dragover', function(e) {
-            e.preventDefault();
-            if (this === draggedCard) return;
-            this.classList.add('drag-over');
-        });
-        
-        card.addEventListener('dragleave', function(e) {
-            this.classList.remove('drag-over');
-        });
-        
-        card.addEventListener('drop', function(e) {
             e.preventDefault();
             e.stopPropagation();
             
             if (!draggedCard || this === draggedCard) return;
             
             const targetCard = this;
-            console.log('[Drag] Drop:', draggedName, '->', targetCard.dataset.agentName);
             
-            // Insert before or after based on position
+            // Get mouse position relative to target card
             const rect = targetCard.getBoundingClientRect();
-            const midY = rect.top + rect.height / 2;
+            const mouseY = e.clientY;
+            const cardCenterY = rect.top + rect.height / 2;
             
-            if (e.clientY < midY) {
-                grid.insertBefore(draggedCard, targetCard);
-            } else {
+            // Determine if we should swap
+            const draggedRect = draggedCard.getBoundingClientRect();
+            const draggedCenterY = draggedRect.top + draggedRect.height / 2;
+            
+            // Check if cards are adjacent or overlapping
+            const isAbove = draggedCenterY < cardCenterY;
+            const isBelow = draggedCenterY > cardCenterY;
+            
+            // Only swap if they've crossed positions
+            if (isAbove && mouseY > cardCenterY) {
+                // Dragged was above, now mouse is below target center -> swap down
+                console.log('[Drag] Swap down:', draggedName, '<->', targetCard.dataset.agentName);
                 grid.insertBefore(draggedCard, targetCard.nextSibling);
+            } else if (isBelow && mouseY < cardCenterY) {
+                // Dragged was below, now mouse is above target center -> swap up
+                console.log('[Drag] Swap up:', draggedName, '<->', targetCard.dataset.agentName);
+                grid.insertBefore(draggedCard, targetCard);
             }
             
-            // Update order
-            updateAgentOrder();
-            saveAgentOrder();
-            
-            targetCard.classList.remove('drag-over');
+            targetCard.classList.add('drag-over');
+        });
+        
+        // Drag Leave - Remove highlight
+        card.addEventListener('dragleave', function(e) {
+            // Only remove if we're actually leaving the card (not entering a child)
+            if (!this.contains(e.relatedTarget)) {
+                this.classList.remove('drag-over');
+            }
+        });
+        
+        // Drop - Finalize (order already updated in dragover)
+        card.addEventListener('drop', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            this.classList.remove('drag-over');
         });
     });
 };
