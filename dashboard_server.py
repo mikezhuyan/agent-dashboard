@@ -32,6 +32,10 @@ openclaw_config_manager = get_openclaw_config_manager()
 finder = get_finder()
 openclaw_home = finder.find_primary()
 
+# 检查 OpenClaw 版本
+MIN_OPENCLAW_VERSION = "2026.3.24"
+version_ok, current_version, version_msg = finder.check_version(MIN_OPENCLAW_VERSION)
+
 # 允许的头像文件扩展名
 ALLOWED_AVATAR_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 MAX_AVATAR_SIZE = 5 * 1024 * 1024  # 5MB
@@ -561,6 +565,15 @@ def print_startup_info():
     print("=" * 60)
     print(f"  {config.get('dashboard_name', 'Agent Dashboard')} v2.1")
     print("=" * 60)
+    
+    # 显示版本信息
+    if current_version:
+        print(f"OpenClaw: v{current_version} {'✓' if version_ok else '⚠️'}")
+    if version_msg:
+        print(f"  ⚠️  WARNING: {version_msg}")
+        print(f"  ℹ️  请升级: npm install -g openclaw@latest")
+        print()
+    
     print(f"Dashboard: http://localhost:{config.get('port', 5178)}")
     print(f"OpenClaw Home: {openclaw_home or 'Not found'}")
     print(f"Agents Dir: {finder.get_agents_dir() or 'Not found'}")

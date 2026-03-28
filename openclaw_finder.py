@@ -6,8 +6,10 @@ OpenClaw Installation Finder Module
 
 import os
 import glob
+import re
+import subprocess
 from pathlib import Path
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Tuple
 
 
 class OpenClawFinder:
@@ -159,6 +161,52 @@ class OpenClawFinder:
                 return workspace_avatar
         
         return None
+    
+    def get_version(self) -> Tuple[Optional[str], Optional[str]]:
+        """
+        获取OpenClaw版本信息
+        返回: (版本号字符串如 '2026.3.24', 完整版本字符串)
+        """
+        try:
+            result = subprocess.run(
+                ['openclaw', '--version'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0:
+                full_version = result.stdout.strip()
+                # 解析版本号，格式如 "OpenClaw 2026.3.24 (cff6dc9)"
+                match = re.search(r'(\d{4}\.\d+\.\d+)', full_version)
+                if match:
+                    return match.group(1), full_version
+                return None, full_version
+        except (subprocess.SubprocessError, FileNotFoundError):
+            pass
+        return None, None
+    
+    def check_version(self, min_version: str = "2026.3.24") -> Tuple[bool, Optional[str], Optional[str]]:
+        """
+        检查OpenClaw版本是否满足最低要求
+        返回: (是否满足, 当前版本, 提示信息)
+        """
+        version, full_version = self.get_version()
+        
+        if not version:
+            return False, None, "无法获取 OpenClaw 版本，请确保已安装 openclaw"
+        
+        # 版本比较 (2026.3.24 格式)
+        def parse_ver(v: str):
+            parts = v.split('.')
+            return tuple(int(p) for p in parts[:3])
+        
+        current = parse_ver(version)
+        required = parse_ver(min_version)
+        
+        if current < required:
+            return False, version, f"OpenClaw 版本过旧 (当前: {version}, 需要: ≥{min_version})"
+        
+        return True, version, None
 
 
 # 全局finder实例
