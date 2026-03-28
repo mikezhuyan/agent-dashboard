@@ -75,7 +75,6 @@ class OpenClawConfigManager:
             if "meta" not in config:
                 config["meta"] = {}
             config["meta"]["lastTouchedAt"] = datetime.now().isoformat()
-            config["meta"]["lastTouchedBy"] = "agent-dashboard"
             
             with open(self.config_file, 'w', encoding='utf-8') as f:
                 json.dump(config, f, indent=2, ensure_ascii=False)
@@ -122,10 +121,9 @@ class OpenClawConfigManager:
                 }
             }
             
-            # 添加 system prompt（如果提供）
-            system_prompt = agent_config.get("system_prompt", "").strip()
-            if system_prompt:
-                new_agent_config["system"] = system_prompt
+            # Note: system prompt 不保存在 openclaw.json 中
+            # 它只保存在 metadata.json 中供 Dashboard 使用
+            # OpenClaw 从 sessions 或 AGENTS.md 读取 system prompt
             
             # 添加或更新
             if existing_idx is not None:
