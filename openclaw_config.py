@@ -122,6 +122,11 @@ class OpenClawConfigManager:
                 }
             }
             
+            # 添加 system prompt（如果提供）
+            system_prompt = agent_config.get("system_prompt", "").strip()
+            if system_prompt:
+                new_agent_config["system"] = system_prompt
+            
             # 添加或更新
             if existing_idx is not None:
                 # 保留原有配置，只更新指定字段
