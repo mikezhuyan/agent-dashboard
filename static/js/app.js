@@ -615,6 +615,8 @@ const updateUI = () => {
     renderAgentCards();
 };
 
+let isDragging = false;
+
 const startAutoRefresh = () => {
     if (state.refreshInterval) {
         clearInterval(state.refreshInterval);
@@ -622,6 +624,11 @@ const startAutoRefresh = () => {
     
     const interval = (state.config?.refresh_interval || 30) * 1000;
     state.refreshInterval = setInterval(async () => {
+        // Skip refresh if user is dragging
+        if (isDragging) {
+            console.log('[AutoRefresh] Skipped (dragging)');
+            return;
+        }
         await loadData();
         updateUI();
     }, interval);
@@ -888,107 +895,111 @@ const loadViewPreference = () => {
 };
 
 // ========================================
-// Drag and Drop Sorting
+// Drag and Drop Sorting (Simplified)
 // ========================================
 
-let draggedElement = null;
-let draggedAgentName = null;
+let draggedCard = null;
+let draggedName = null;
 
 const initDragAndDrop = () => {
     const grid = document.getElementById('agentGrid');
     if (!grid || state.viewMode === 'list') return;
     
-    grid.classList.add('drag-enabled');
-    
     const cards = grid.querySelectorAll('.agent-card');
+    
     cards.forEach(card => {
+        // Remove old listeners to avoid duplicates
+        card.removeEventListener('dragstart', onDragStart);
+        card.removeEventListener('dragend', onDragEnd);
+        card.removeEventListener('dragover', onDragOver);
+        card.removeEventListener('drop', onDrop);
+        
+        // Enable draggable
         card.draggable = true;
-        card.addEventListener('dragstart', handleDragStart);
-        card.addEventListener('dragend', handleDragEnd);
-        card.addEventListener('dragover', handleDragOver);
-        card.addEventListener('drop', handleDrop);
-        card.addEventListener('dragenter', handleDragEnter);
-        card.addEventListener('dragleave', handleDragLeave);
+        card.style.cursor = 'move';
+        
+        // Add listeners
+        card.addEventListener('dragstart', onDragStart);
+        card.addEventListener('dragend', onDragEnd);
+        card.addEventListener('dragover', onDragOver);
+        card.addEventListener('drop', onDrop);
     });
+    
+    console.log('[Drag] Initialized for', cards.length, 'cards');
 };
 
-const handleDragStart = (e) => {
-    draggedElement = e.target.closest('.agent-card');
-    draggedAgentName = draggedElement.dataset.agentName;
+function onDragStart(e) {
+    isDragging = true;
+    draggedCard = this;
+    draggedName = this.dataset.agentName;
     
     e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', draggedAgentName);
+    e.dataTransfer.setData('text/plain', draggedName);
     
-    draggedElement.classList.add('dragging');
+    this.style.opacity = '0.5';
+    this.classList.add('dragging');
     
-    // Disable auto-refresh during drag
-    if (state.refreshInterval) {
-        clearInterval(state.refreshInterval);
-    }
-};
+    console.log('[Drag] Started:', draggedName);
+}
 
-const handleDragEnd = (e) => {
-    if (draggedElement) {
-        draggedElement.classList.remove('dragging');
-    }
+function onDragEnd(e) {
+    isDragging = false;
+    this.style.opacity = '1';
+    this.classList.remove('dragging');
     
     document.querySelectorAll('.agent-card').forEach(card => {
         card.classList.remove('drag-over');
     });
     
-    draggedElement = null;
-    draggedAgentName = null;
-    
-    // Re-enable auto-refresh
-    startAutoRefresh();
-};
+    console.log('[Drag] Ended:', draggedName);
+    draggedCard = null;
+    draggedName = null;
+}
 
-const handleDragOver = (e) => {
+function onDragOver(e) {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
-};
+    
+    const target = this;
+    if (target === draggedCard) return;
+    
+    target.classList.add('drag-over');
+}
 
-const handleDragEnter = (e) => {
+function onDrop(e) {
     e.preventDefault();
-    const card = e.target.closest('.agent-card');
-    if (card && card !== draggedElement) {
-        card.classList.add('drag-over');
-    }
-};
-
-const handleDragLeave = (e) => {
-    const card = e.target.closest('.agent-card');
-    if (card) {
-        card.classList.remove('drag-over');
-    }
-};
-
-const handleDrop = (e) => {
-    e.preventDefault();
+    e.stopPropagation();
     
-    const targetCard = e.target.closest('.agent-card');
-    if (!targetCard || targetCard === draggedElement) return;
+    const targetCard = this;
+    if (!draggedCard || targetCard === draggedCard) return;
     
-    const targetAgentName = targetCard.dataset.agentName;
+    const targetName = targetCard.dataset.agentName;
     
-    // Update order
+    console.log('[Drag] Drop:', draggedName, '->', targetName);
+    
+    // Swap positions
     const grid = document.getElementById('agentGrid');
-    const cards = Array.from(grid.querySelectorAll('.agent-card'));
-    const draggedIndex = cards.indexOf(draggedElement);
-    const targetIndex = cards.indexOf(targetCard);
+    const allCards = Array.from(grid.children);
+    const draggedIndex = allCards.indexOf(draggedCard);
+    const targetIndex = allCards.indexOf(targetCard);
     
     if (draggedIndex < targetIndex) {
-        targetCard.after(draggedElement);
+        grid.insertBefore(draggedCard, targetCard.nextSibling);
     } else {
-        targetCard.before(draggedElement);
+        grid.insertBefore(draggedCard, targetCard);
     }
     
-    // Update state and save
+    // Update order
     updateAgentOrder();
-    saveViewPreference();
     
+    // Save
+    saveAgentOrder();
+    
+    // Visual feedback
     targetCard.classList.remove('drag-over');
-};
+    
+    console.log('[Drag] New order:', state.agentOrder);
+}
 
 const updateAgentOrder = () => {
     const grid = document.getElementById('agentGrid');
@@ -996,29 +1007,47 @@ const updateAgentOrder = () => {
     state.agentOrder = Array.from(cards).map(card => card.dataset.agentName);
 };
 
+const saveAgentOrder = async () => {
+    try {
+        await api.updateConfig({
+            agent_order: state.agentOrder
+        });
+        console.log('[Drag] Order saved');
+    } catch (e) {
+        console.error('[Drag] Failed to save order:', e);
+    }
+};
+
 // Override renderAgentCards to support sorting
-const originalRenderAgentCards = renderAgentCards;
-renderAgentCards = () => {
-    originalRenderAgentCards();
+// Hook into renderAgentCards
+const _originalRender = renderAgentCards;
+renderAgentCards = function() {
+    _originalRender();
     
     // Apply custom order if exists
-    if (state.agentOrder.length > 0) {
+    if (state.agentOrder && state.agentOrder.length > 0) {
         const grid = document.getElementById('agentGrid');
-        const cards = Array.from(grid.querySelectorAll('.agent-card'));
-        
-        cards.sort((a, b) => {
-            const aIndex = state.agentOrder.indexOf(a.dataset.agentName);
-            const bIndex = state.agentOrder.indexOf(b.dataset.agentName);
-            if (aIndex === -1) return 1;
-            if (bIndex === -1) return -1;
-            return aIndex - bIndex;
-        });
-        
-        cards.forEach(card => grid.appendChild(card));
+        if (grid) {
+            const cards = Array.from(grid.querySelectorAll('.agent-card'));
+            
+            cards.sort((a, b) => {
+                const aName = a.dataset.agentName;
+                const bName = b.dataset.agentName;
+                const aIndex = state.agentOrder.indexOf(aName);
+                const bIndex = state.agentOrder.indexOf(bName);
+                if (aIndex === -1) return 1;
+                if (bIndex === -1) return -1;
+                return aIndex - bIndex;
+            });
+            
+            cards.forEach(card => grid.appendChild(card));
+        }
     }
     
-    // Initialize drag and drop
-    setTimeout(initDragAndDrop, 100);
+    // Initialize drag and drop after render
+    setTimeout(() => {
+        initDragAndDrop();
+    }, 200);
 };
 
 // Modify loadData to load view preference
