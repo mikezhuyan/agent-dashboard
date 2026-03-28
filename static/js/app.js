@@ -988,15 +988,6 @@ const initDragAndDrop = () => {
     });
 };
 
-    try {
-        await api.updateConfig({
-            agent_order: state.agentOrder
-        });
-        console.log('[Drag] Order saved');
-    } catch (e) {
-        console.error('[Drag] Failed to save order:', e);
-    }
-};
 
 // Override renderAgentCards to support sorting
 // Hook into renderAgentCards
