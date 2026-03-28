@@ -621,6 +621,11 @@ let loadData = async () => {
             document.title = state.config.dashboard_name;
             document.getElementById('dashboardTitle').textContent = state.config.dashboard_name;
             document.getElementById('dashboardSubtitle').textContent = state.config.dashboard_subtitle;
+            
+            // Load view mode and agent order from config
+            state.viewMode = state.config.view_mode || 'grid';
+            state.agentOrder = state.config.agent_order || [];
+            console.log('[Load] Loaded agentOrder:', state.agentOrder);
         }
         
         // Load agents and stats
@@ -897,8 +902,8 @@ const saveViewPreference = async () => {
 
 const loadViewPreference = () => {
     if (state.config) {
-        state.viewMode = state.config.view_mode || 'grid';
-        state.agentOrder = state.config.agent_order || [];
+        // viewMode and agentOrder are already loaded in loadData
+        // This function only applies UI changes
         
         // Apply view mode
         const grid = document.getElementById('agentGrid');
@@ -1062,39 +1067,18 @@ const initDragAndDrop = () => {
 };
 
 
-// Override renderAgentCards to support sorting
-// Hook into renderAgentCards
+// Hook into renderAgentCards to init drag and drop
 const _originalRender = renderAgentCards;
 renderAgentCards = function() {
-    console.log('[Render] renderAgentCards called');
+    console.log('[Render] renderAgentCards called, agentOrder:', state.agentOrder);
     _originalRender();
-    
-    // Apply custom order if exists
-    if (state.agentOrder && state.agentOrder.length > 0) {
-        const grid = document.getElementById('agentGrid');
-        if (grid) {
-            const cards = Array.from(grid.querySelectorAll('.agent-card'));
-            
-            cards.sort((a, b) => {
-                const aName = a.dataset.agentName;
-                const bName = b.dataset.agentName;
-                const aIndex = state.agentOrder.indexOf(aName);
-                const bIndex = state.agentOrder.indexOf(bName);
-                if (aIndex === -1) return 1;
-                if (bIndex === -1) return -1;
-                return aIndex - bIndex;
-            });
-            
-            cards.forEach(card => grid.appendChild(card));
-        }
-    }
     
     // Initialize drag and drop after render
     console.log('[Render] Scheduling initDragAndDrop, viewMode:', state.viewMode);
     setTimeout(() => {
         console.log('[Render] Calling initDragAndDrop');
         initDragAndDrop();
-    }, 300);
+    }, 100);
 };
 
 // Modify loadData to load view preference
