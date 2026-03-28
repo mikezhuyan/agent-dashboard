@@ -601,5 +601,6 @@ if __name__ == '__main__':
     app.run(
         host=config.get('host', '0.0.0.0'),
         port=config.get('port', 5178),
-        debug=config.get('debug', False)
+        debug=config.get('debug', False),
+        threaded=True
     )
