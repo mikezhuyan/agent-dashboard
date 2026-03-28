@@ -243,7 +243,24 @@ let renderAgentCards = () => {
         return;
     }
     
-    state.agents.forEach(agent => {
+    // Sort agents by agentOrder if available
+    let agentsToRender = [...state.agents];
+    if (state.agentOrder && state.agentOrder.length > 0) {
+        const orderMap = new Map(state.agentOrder.map((name, index) => [name, index]));
+        agentsToRender.sort((a, b) => {
+            const orderA = orderMap.get(a.name);
+            const orderB = orderMap.get(b.name);
+            if (orderA !== undefined && orderB !== undefined) {
+                return orderA - orderB;
+            }
+            // Agents not in order list go to the end
+            if (orderA !== undefined) return -1;
+            if (orderB !== undefined) return 1;
+            return 0;
+        });
+    }
+    
+    agentsToRender.forEach(agent => {
         const display = agent.display;
         const agentStats = state.stats?.byAgent?.[agent.name] || {};
         const session = agentStats.lastSession;
@@ -991,7 +1008,7 @@ const initDragAndDrop = () => {
             draggedName = null;
         });
         
-        // Drag Over - Real-time swap
+        // Drag Over - Real-time swap (simplified)
         card.addEventListener('dragover', function(e) {
             e.preventDefault();
             e.stopPropagation();
@@ -1000,28 +1017,28 @@ const initDragAndDrop = () => {
             
             const targetCard = this;
             
-            // Get mouse position relative to target card
+            // Simple swap: mouse above center -> insert before, below -> insert after
             const rect = targetCard.getBoundingClientRect();
             const mouseY = e.clientY;
             const cardCenterY = rect.top + rect.height / 2;
             
-            // Determine if we should swap
-            const draggedRect = draggedCard.getBoundingClientRect();
-            const draggedCenterY = draggedRect.top + draggedRect.height / 2;
+            // Get current indices to prevent unnecessary swaps
+            const cards = Array.from(grid.querySelectorAll('.agent-card'));
+            const draggedIndex = cards.indexOf(draggedCard);
+            const targetIndex = cards.indexOf(targetCard);
             
-            // Check if cards are adjacent or overlapping
-            const isAbove = draggedCenterY < cardCenterY;
-            const isBelow = draggedCenterY > cardCenterY;
-            
-            // Only swap if they've crossed positions
-            if (isAbove && mouseY > cardCenterY) {
-                // Dragged was above, now mouse is below target center -> swap down
-                console.log('[Drag] Swap down:', draggedName, '<->', targetCard.dataset.agentName);
-                grid.insertBefore(draggedCard, targetCard.nextSibling);
-            } else if (isBelow && mouseY < cardCenterY) {
-                // Dragged was below, now mouse is above target center -> swap up
-                console.log('[Drag] Swap up:', draggedName, '<->', targetCard.dataset.agentName);
-                grid.insertBefore(draggedCard, targetCard);
+            if (mouseY < cardCenterY) {
+                // Mouse in upper half: insert before target
+                if (draggedIndex !== targetIndex - 1) {
+                    console.log('[Drag] Swap before:', draggedName, '->', targetCard.dataset.agentName);
+                    grid.insertBefore(draggedCard, targetCard);
+                }
+            } else {
+                // Mouse in lower half: insert after target
+                if (draggedIndex !== targetIndex + 1) {
+                    console.log('[Drag] Swap after:', draggedName, '->', targetCard.dataset.agentName);
+                    grid.insertBefore(draggedCard, targetCard.nextSibling);
+                }
             }
             
             targetCard.classList.add('drag-over');

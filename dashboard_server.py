@@ -87,7 +87,9 @@ def get_config_endpoint():
         "show_cost_estimates": config.get("show_cost_estimates", True),
         "cost_decimal_places": config.get("cost_decimal_places", 4),
         "currency": config.get("token_cost", {}).get("currency", "CNY"),
-        "agent_configs": config.get("agent_configs", {})
+        "agent_configs": config.get("agent_configs", {}),
+        "view_mode": config.get("view_mode", "grid"),
+        "agent_order": config.get("agent_order", [])
     })
 
 
