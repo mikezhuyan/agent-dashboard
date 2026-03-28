@@ -895,7 +895,7 @@ const loadViewPreference = () => {
 };
 
 // ========================================
-// Drag and Drop Sorting (Simplified)
+// Drag and Drop Sorting
 // ========================================
 
 let draggedCard = null;
@@ -903,111 +903,91 @@ let draggedName = null;
 
 const initDragAndDrop = () => {
     const grid = document.getElementById('agentGrid');
-    if (!grid || state.viewMode === 'list') return;
+    if (!grid) return;
+    
+    // Don't enable drag in list mode
+    if (state.viewMode === 'list') {
+        grid.classList.remove('drag-enabled');
+        return;
+    }
+    
+    grid.classList.add('drag-enabled');
     
     const cards = grid.querySelectorAll('.agent-card');
+    console.log('[Drag] Setting up', cards.length, 'cards');
     
-    cards.forEach(card => {
-        // Remove old listeners to avoid duplicates
-        card.removeEventListener('dragstart', onDragStart);
-        card.removeEventListener('dragend', onDragEnd);
-        card.removeEventListener('dragover', onDragOver);
-        card.removeEventListener('drop', onDrop);
+    cards.forEach((card, index) => {
+        // Skip if already initialized
+        if (card.dataset.dragInitialized === 'true') return;
         
         // Enable draggable
         card.draggable = true;
-        card.style.cursor = 'move';
+        card.dataset.dragInitialized = 'true';
         
-        // Add listeners
-        card.addEventListener('dragstart', onDragStart);
-        card.addEventListener('dragend', onDragEnd);
-        card.addEventListener('dragover', onDragOver);
-        card.addEventListener('drop', onDrop);
+        // Add listeners using anonymous functions to avoid reference issues
+        card.addEventListener('dragstart', function(e) {
+            isDragging = true;
+            draggedCard = this;
+            draggedName = this.dataset.agentName;
+            
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', draggedName);
+            
+            this.classList.add('dragging');
+            console.log('[Drag] Start:', draggedName);
+        });
+        
+        card.addEventListener('dragend', function(e) {
+            isDragging = false;
+            this.classList.remove('dragging');
+            
+            document.querySelectorAll('.agent-card').forEach(c => {
+                c.classList.remove('drag-over');
+            });
+            
+            console.log('[Drag] End:', draggedName);
+            draggedCard = null;
+            draggedName = null;
+        });
+        
+        card.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            if (this === draggedCard) return;
+            this.classList.add('drag-over');
+        });
+        
+        card.addEventListener('dragleave', function(e) {
+            this.classList.remove('drag-over');
+        });
+        
+        card.addEventListener('drop', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            if (!draggedCard || this === draggedCard) return;
+            
+            const targetCard = this;
+            console.log('[Drag] Drop:', draggedName, '->', targetCard.dataset.agentName);
+            
+            // Insert before or after based on position
+            const rect = targetCard.getBoundingClientRect();
+            const midY = rect.top + rect.height / 2;
+            
+            if (e.clientY < midY) {
+                grid.insertBefore(draggedCard, targetCard);
+            } else {
+                grid.insertBefore(draggedCard, targetCard.nextSibling);
+            }
+            
+            // Update order
+            updateAgentOrder();
+            saveAgentOrder();
+            
+            targetCard.classList.remove('drag-over');
+        });
     });
-    
-    console.log('[Drag] Initialized for', cards.length, 'cards');
 };
 
-function onDragStart(e) {
-    isDragging = true;
-    draggedCard = this;
-    draggedName = this.dataset.agentName;
-    
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', draggedName);
-    
-    this.style.opacity = '0.5';
-    this.classList.add('dragging');
-    
-    console.log('[Drag] Started:', draggedName);
-}
-
-function onDragEnd(e) {
-    isDragging = false;
-    this.style.opacity = '1';
-    this.classList.remove('dragging');
-    
-    document.querySelectorAll('.agent-card').forEach(card => {
-        card.classList.remove('drag-over');
-    });
-    
-    console.log('[Drag] Ended:', draggedName);
-    draggedCard = null;
-    draggedName = null;
-}
-
-function onDragOver(e) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    
-    const target = this;
-    if (target === draggedCard) return;
-    
-    target.classList.add('drag-over');
-}
-
-function onDrop(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    const targetCard = this;
-    if (!draggedCard || targetCard === draggedCard) return;
-    
-    const targetName = targetCard.dataset.agentName;
-    
-    console.log('[Drag] Drop:', draggedName, '->', targetName);
-    
-    // Swap positions
-    const grid = document.getElementById('agentGrid');
-    const allCards = Array.from(grid.children);
-    const draggedIndex = allCards.indexOf(draggedCard);
-    const targetIndex = allCards.indexOf(targetCard);
-    
-    if (draggedIndex < targetIndex) {
-        grid.insertBefore(draggedCard, targetCard.nextSibling);
-    } else {
-        grid.insertBefore(draggedCard, targetCard);
-    }
-    
-    // Update order
-    updateAgentOrder();
-    
-    // Save
-    saveAgentOrder();
-    
-    // Visual feedback
-    targetCard.classList.remove('drag-over');
-    
-    console.log('[Drag] New order:', state.agentOrder);
-}
-
-const updateAgentOrder = () => {
-    const grid = document.getElementById('agentGrid');
-    const cards = grid.querySelectorAll('.agent-card');
-    state.agentOrder = Array.from(cards).map(card => card.dataset.agentName);
-};
-
-const saveAgentOrder = async () => {
     try {
         await api.updateConfig({
             agent_order: state.agentOrder
@@ -1058,4 +1038,24 @@ loadData = async () => {
         loadViewPreference();
     }
     return result;
+};
+
+// Update and save agent order
+const updateAgentOrder = () => {
+    const grid = document.getElementById('agentGrid');
+    if (!grid) return;
+    const cards = grid.querySelectorAll('.agent-card');
+    state.agentOrder = Array.from(cards).map(card => card.dataset.agentName);
+    console.log('[Drag] Order updated:', state.agentOrder);
+};
+
+const saveAgentOrder = async () => {
+    try {
+        await api.updateConfig({
+            agent_order: state.agentOrder
+        });
+        console.log('[Drag] Order saved');
+    } catch (e) {
+        console.error('[Drag] Failed to save order:', e);
+    }
 };
