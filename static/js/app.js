@@ -84,13 +84,28 @@ const api = {
         return response.json();
     },
     
-    async updateConfig(data) {
-        const response = await fetch('/api/config', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        return response.json();
+    async updateConfig(data, retries = 3) {
+        let lastError;
+        for (let i = 0; i < retries; i++) {
+            try {
+                const response = await fetch('/api/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                return await response.json();
+            } catch (error) {
+                lastError = error;
+                console.warn(`[API] Config update failed (attempt ${i + 1}/${retries}):`, error.message);
+                if (i < retries - 1) {
+                    await new Promise(r => setTimeout(r, 300 * (i + 1))); // 递增延迟
+                }
+            }
+        }
+        throw lastError;
     },
     
     async getAgents() {
@@ -948,7 +963,7 @@ const initDragAndDrop = () => {
             this.classList.add('dragging');
         });
         
-        // Drag End - Save final order
+        // Drag End - Save final order (debounced)
         card.addEventListener('dragend', function(e) {
             const cardName = this.dataset.agentName;
             console.log('[Drag] dragend:', cardName);
@@ -959,10 +974,18 @@ const initDragAndDrop = () => {
                 c.classList.remove('drag-over');
             });
             
-            // Save order only at the end
+            // Update order immediately, but save with debounce
             console.log('[Drag] Calling updateAgentOrder and saveAgentOrder');
             updateAgentOrder();
-            saveAgentOrder();
+            
+            // Clear previous timeout and set new one
+            if (saveOrderTimeout) {
+                clearTimeout(saveOrderTimeout);
+            }
+            saveOrderTimeout = setTimeout(() => {
+                saveAgentOrder();
+                saveOrderTimeout = null;
+            }, 100); // Small delay to batch rapid changes
             
             draggedCard = null;
             draggedName = null;
