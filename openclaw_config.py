@@ -314,10 +314,10 @@ class OpenClawConfigManager:
             with open(metadata_file, 'w', encoding='utf-8') as f:
                 json.dump(metadata, f, indent=2, ensure_ascii=False)
             
-            # 6. 写入 soul.md 文件（系统提示词）
+            # 6. 写入 soul.md 文件（系统提示词）到工作目录
             system_prompt = agent_data.get("system_prompt", "").strip()
             if system_prompt:
-                soul_file = agent_dir / "soul.md"
+                soul_file = workspace_dir / "soul.md"
                 with open(soul_file, 'w', encoding='utf-8') as f:
                     f.write(system_prompt)
                 print(f"[CreateAgent] soul.md 已创建: {soul_file}")
