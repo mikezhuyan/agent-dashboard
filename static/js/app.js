@@ -13,7 +13,8 @@ const state = {
     viewMode: 'grid', // grid, grid-horizontal, list
     agentOrder: [],
     dragEnabled: true,
-    openclawBaseUrl: null  // OpenClaw base URL for work check links
+    openclawBaseUrl: null,  // OpenClaw base URL for work check links
+    sidebarOpen: false  // 侧边栏展开状态
 };
 
 // Utility functions
@@ -245,6 +246,143 @@ window.openWorkCheck = (agentName) => {
     window.open(url, '_blank');
 };
 
+// 渲染侧边栏内容
+const renderSidebar = (agentName) => {
+    const agent = state.agents.find(a => a.name === agentName);
+    if (!agent) return;
+    
+    const display = agent.display;
+    const agentStats = state.stats?.byAgent?.[agent.name] || {};
+    const workCheckUrl = state.openclawBaseUrl 
+        ? `${state.openclawBaseUrl}/chat?session=agent%3A${agent.name}%3A${agent.name}`
+        : null;
+    
+    const sidebarContent = document.getElementById('sidebarContent');
+    sidebarContent.innerHTML = `
+        <div class="sidebar-agent-header">
+            <div class="sidebar-avatar ${display.color}">
+                <span>${display.emoji}</span>
+            </div>
+            <div class="sidebar-agent-info">
+                <h4>${display.name}</h4>
+                <p>${display.role}</p>
+                <span class="sidebar-status ${agentStats.isRunning ? 'running' : 'idle'}">
+                    ${agentStats.isRunning ? '●' : '○'} ${agentStats.isRunning ? '运行中' : '已结束'}
+                </span>
+            </div>
+        </div>
+        
+        ${workCheckUrl ? `
+            <a href="${workCheckUrl}" target="_blank" class="sidebar-work-check">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+                </svg>
+                打开对话
+            </a>
+        ` : ''}
+        
+        <div class="sidebar-section">
+            <h5>📊 Token 统计</h5>
+            <div class="sidebar-token-total">
+                <span class="token-total-value">${formatNumber(agentStats.tokens || 0)}</span>
+                <span class="token-total-label">总 Tokens</span>
+            </div>
+            <div class="sidebar-token-stats">
+                <div class="sidebar-token-item">
+                    <span class="token-dot input"></span>
+                    <span class="token-label">Input</span>
+                    <span class="token-value">${formatNumber(agentStats.inputTokens || 0)}</span>
+                </div>
+                <div class="sidebar-token-item">
+                    <span class="token-dot output"></span>
+                    <span class="token-label">Output</span>
+                    <span class="token-value">${formatNumber(agentStats.outputTokens || 0)}</span>
+                </div>
+                <div class="sidebar-token-item">
+                    <span class="token-dot cache"></span>
+                    <span class="token-label">Cache</span>
+                    <span class="token-value">${formatNumber(agentStats.cacheTokens || 0)}</span>
+                </div>
+            </div>
+            ${state.config?.show_cost_estimates && agentStats.estimatedCost ? `
+                <div class="sidebar-cost">
+                    <span class="cost-label">预估费用</span>
+                    <span class="cost-value">${formatCurrency(agentStats.estimatedCost.total_cost, agentStats.estimatedCost.currency, 4)}</span>
+                </div>
+            ` : ''}
+        </div>
+        
+        <div class="sidebar-section">
+            <h5>💬 会话记录 (${agentStats.sessions || 0})</h5>
+            <div class="sidebar-task-list" id="sidebar-tasks-${agent.name}">
+                <div class="loading" style="padding: 20px;">
+                    <div class="loading-spinner" style="width: 30px; height: 30px;"></div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Load sessions for sidebar
+    loadSidebarTasks(agent.name);
+};
+
+// 加载侧边栏任务列表
+const loadSidebarTasks = async (agentName) => {
+    try {
+        const sessions = await api.getAgentSessions(agentName);
+        const container = document.getElementById(`sidebar-tasks-${agentName}`);
+        if (!container) return;
+        
+        const sessionList = Object.entries(sessions);
+        if (sessionList.length === 0) {
+            container.innerHTML = `
+                <div class="sidebar-empty-tasks">
+                    <p>暂无会话记录</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // Sort by updatedAt
+        sessionList.sort((a, b) => (b[1].updatedAt || 0) - (a[1].updatedAt || 0));
+        
+        container.innerHTML = sessionList.map(([key, session]) => {
+            const status = session.status || 'unknown';
+            const statusClass = status === 'done' ? 'success' : status === 'running' ? 'running' : status === 'failed' ? 'error' : 'success';
+            const statusText = status === 'done' ? '完成' : status === 'running' ? '运行中' : status === 'failed' ? '失败' : '完成';
+            const label = session.label || '未命名任务';
+            
+            return `
+                <div class="sidebar-task-item ${statusClass}" onclick="showSessionDetails('${key}', '${escapeHtml(JSON.stringify(session))}')">
+                    <div class="task-status-dot ${status}"></div>
+                    <div class="task-info">
+                        <div class="task-title">${escapeHtml(label)}</div>
+                        <div class="task-meta">${formatDuration(session.runtimeMs)} · ${formatNumber(session.totalTokens || 0)} tokens</div>
+                    </div>
+                    <span class="task-status-text">${statusText}</span>
+                </div>
+            `;
+        }).join('');
+    } catch (e) {
+        console.error(`Failed to load tasks for ${agentName}:`, e);
+    }
+};
+
+// 切换侧边栏
+window.toggleSidebar = () => {
+    state.sidebarOpen = !state.sidebarOpen;
+    document.body.classList.toggle('sidebar-open', state.sidebarOpen);
+};
+
+// 选择 Agent 显示在侧边栏
+window.selectAgent = (agentName) => {
+    state.selectedAgent = agentName;
+    renderSidebar(agentName);
+    if (!state.sidebarOpen) {
+        toggleSidebar();
+    }
+};
+
 let renderAgentCards = () => {
     const grid = document.getElementById('agentGrid');
     grid.innerHTML = '';
@@ -269,7 +407,6 @@ let renderAgentCards = () => {
             if (orderA !== undefined && orderB !== undefined) {
                 return orderA - orderB;
             }
-            // Agents not in order list go to the end
             if (orderA !== undefined) return -1;
             if (orderB !== undefined) return 1;
             return 0;
@@ -279,17 +416,20 @@ let renderAgentCards = () => {
     agentsToRender.forEach(agent => {
         const display = agent.display;
         const agentStats = state.stats?.byAgent?.[agent.name] || {};
-        const session = agentStats.lastSession;
         const isRunning = agentStats.isRunning;
-        
-        // Generate work check URL
-        const workCheckUrl = state.openclawBaseUrl 
-            ? `${state.openclawBaseUrl}/chat?session=agent%3A${agent.name}%3A${agent.name}`
-            : null;
+        const isSelected = state.selectedAgent === agent.name;
         
         const card = document.createElement('div');
-        card.className = `agent-card ${isRunning ? 'running' : ''}`;
+        card.className = `agent-card ${isRunning ? 'running' : ''} ${isSelected ? 'selected' : ''}`;
         card.dataset.agentName = agent.name;
+        card.onclick = (e) => {
+            // Don't select if clicking on drag handle or work check button
+            if (e.target.closest('.drag-handle') || e.target.closest('.work-check-btn')) {
+                return;
+            }
+            selectAgent(agent.name);
+        };
+        
         card.innerHTML = `
             <!-- Drag Handle -->
             <div class="drag-handle" title="拖动调整排序">
@@ -305,7 +445,7 @@ let renderAgentCards = () => {
             
             <div class="agent-header">
                 <div class="agent-identity">
-                    <div class="avatar-container" onclick="openAvatarUpload('${agent.name}')">
+                    <div class="avatar-container" onclick="event.stopPropagation(); openAvatarUpload('${agent.name}')">
                         <div class="avatar ${display.color}">
                             <div class="avatar-bg"></div>
                             <img src="/api/agents/${agent.name}/avatar" alt="${display.emoji} ${display.name}" 
@@ -321,73 +461,39 @@ let renderAgentCards = () => {
                         <span class="status-badge ${isRunning ? 'running' : 'idle'}">
                             ${isRunning ? '●' : '○'} ${isRunning ? '运行中' : '已结束'}
                         </span>
-                        <div class="current-model" id="model-${agent.name}">
-                            ${agentStats.currentModel ? `
-                                <span class="model-icon">🤖</span>
-                                <span class="model-name">${agentStats.currentModel}</span>
-                            ` : '<span class="model-name">未运行</span>'}
-                        </div>
+                        ${agentStats.currentModel ? `
+                            <div class="current-model-compact">
+                                <span>${agentStats.currentModel}</span>
+                            </div>
+                        ` : ''}
                     </div>
                 </div>
             </div>
             
             <!-- Work Check Button -->
-            <button class="work-check-btn ${workCheckUrl ? '' : 'disabled'}" 
-                    onclick="openWorkCheck('${agent.name}')"
-                    ${workCheckUrl ? '' : 'disabled title="OpenClaw URL 未配置"'}
-                    aria-label="工作检查">
+            <button class="work-check-btn" 
+                    onclick="event.stopPropagation(); openWorkCheck('${agent.name}')"
+                    ${state.openclawBaseUrl ? '' : 'disabled title="OpenClaw URL 未配置"'}>
                 <svg class="work-check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
                 </svg>
                 <span class="work-check-tooltip">对话</span>
             </button>
             
-            <div class="agent-body">
-                <div class="token-section">
-                    <div class="section-title">Token 使用情况</div>
-                    <div class="token-bar-container">
-                        <div class="token-header">
-                            <span class="token-value">${formatNumber(agentStats.tokens || 0)}</span>
-                            <span class="token-limit">tokens</span>
-                        </div>
-                        <div class="token-stats">
-                            <div class="token-stat">
-                                <span class="token-stat-value">${formatNumber(agentStats.inputTokens || 0)}</span>
-                                <span class="token-stat-label">Input</span>
-                            </div>
-                            <div class="token-stat">
-                                <span class="token-stat-value">${formatNumber(agentStats.outputTokens || 0)}</span>
-                                <span class="token-stat-label">Output</span>
-                            </div>
-                            <div class="token-stat">
-                                <span class="token-stat-value">${formatNumber(agentStats.cacheTokens || 0)}</span>
-                                <span class="token-stat-label">Cache</span>
-                            </div>
-                        </div>
-                        ${state.config?.show_cost_estimates && agentStats.estimatedCost ? `
-                            <div class="cost-display">
-                                <span class="cost-label">预估费用</span>
-                                <span class="cost-value">${formatCurrency(agentStats.estimatedCost.total_cost, agentStats.estimatedCost.currency, 4)}</span>
-                            </div>
-                        ` : ''}
-                    </div>
+            <!-- Quick Stats -->
+            <div class="agent-quick-stats">
+                <div class="quick-stat">
+                    <span class="quick-stat-value">${formatNumber(agentStats.tokens || 0)}</span>
+                    <span class="quick-stat-label">Tokens</span>
                 </div>
-                
-                <div class="task-section">
-                    <div class="section-title">会话数 (${agentStats.sessions || 0})</div>
-                    <div class="task-list" id="tasks-${agent.name}">
-                        <div class="loading" style="padding: 20px;">
-                            <div class="loading-spinner" style="width: 30px; height: 30px;"></div>
-                        </div>
-                    </div>
+                <div class="quick-stat">
+                    <span class="quick-stat-value">${agentStats.sessions || 0}</span>
+                    <span class="quick-stat-label">会话</span>
                 </div>
             </div>
         `;
         
         grid.appendChild(card);
-        
-        // Load sessions for this agent
-        loadAgentTasks(agent.name);
     });
 };
 

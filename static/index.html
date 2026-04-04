@@ -13,7 +13,28 @@
     <!-- Floating particles -->
     <div id="particles"></div>
 
-    <div class="container">
+    <!-- Sidebar Toggle Button (Fixed) -->
+    <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()" title="切换详情面板">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 18l6-6-6-6"/>
+        </svg>
+    </button>
+
+    <!-- Left Sidebar (Collapsible) -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h3>📊 Agent 详情</h3>
+            <button class="sidebar-close" onclick="toggleSidebar()">✕</button>
+        </div>
+        <div class="sidebar-content" id="sidebarContent">
+            <div class="sidebar-empty">
+                <div class="sidebar-empty-icon">👈</div>
+                <p>点击 Agent 卡片查看详情</p>
+            </div>
+        </div>
+    </aside>
+
+    <div class="main-content" id="mainContent">
         <header>
             <div class="header-top">
                 <div class="view-switcher">
