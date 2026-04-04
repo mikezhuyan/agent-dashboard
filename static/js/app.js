@@ -174,6 +174,39 @@ const api = {
     async getOpenClawUrl() {
         const response = await fetch('/api/openclaw-url');
         return response.json();
+    },
+    
+    // Subagents API
+    async getAgentSubagents(agentName) {
+        const response = await fetch(`/api/agents/${agentName}/subagents`);
+        return response.json();
+    },
+    
+    async updateAgentSubagents(agentName, data) {
+        const response = await fetch(`/api/agents/${agentName}/subagents`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        return response.json();
+    },
+    
+    async addAgentToAllowAgents(targetAgent, agentToAdd) {
+        const response = await fetch(`/api/agents/${targetAgent}/subagents/add`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ agentToAdd })
+        });
+        return response.json();
+    },
+    
+    async removeAgentFromAllowAgents(targetAgent, agentToRemove) {
+        const response = await fetch(`/api/agents/${targetAgent}/subagents/remove`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ agentToRemove })
+        });
+        return response.json();
     }
 };
 
@@ -862,6 +895,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (e.target === e.currentTarget) closeCreateAgentModal();
     });
     
+    document.getElementById('subagentsModal').addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) closeSubagentsManager();
+    });
+    
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
@@ -1285,5 +1322,132 @@ const saveAgentOrder = async () => {
     } catch (e) {
         console.error('[Drag] Failed to save order:', e);
         throw e;
+    }
+};
+
+
+// ========================================
+// Subagents Manager Functions
+// ========================================
+
+// 打开子 Agent 管理器
+window.openSubagentsManager = () => {
+    const modal = document.getElementById('subagentsModal');
+    modal.classList.add('active');
+    loadDispatcherOptions();
+};
+
+// 关闭子 Agent 管理器
+window.closeSubagentsManager = () => {
+    document.getElementById('subagentsModal').classList.remove('active');
+    // 重置表单
+    document.getElementById('subagentDispatcherSelect').value = '';
+    document.getElementById('subagentsConfig').style.display = 'none';
+};
+
+// 加载调度者选项
+const loadDispatcherOptions = () => {
+    const select = document.getElementById('subagentDispatcherSelect');
+    select.innerHTML = '<option value="">请选择...</option>';
+    
+    state.agents.forEach(agent => {
+        const option = document.createElement('option');
+        option.value = agent.name;
+        option.textContent = `${agent.display.emoji} ${agent.display.name} (${agent.name})`;
+        select.appendChild(option);
+    });
+};
+
+// 加载子 Agent 配置
+window.loadSubagentConfig = async () => {
+    const dispatcherSelect = document.getElementById('subagentDispatcherSelect');
+    const dispatcherName = dispatcherSelect.value;
+    
+    if (!dispatcherName) {
+        document.getElementById('subagentsConfig').style.display = 'none';
+        return;
+    }
+    
+    try {
+        // 获取当前配置
+        const config = await api.getAgentSubagents(dispatcherName);
+        
+        // 设置最大并发数
+        document.getElementById('subagentMaxConcurrent').value = config.maxConcurrent || 4;
+        
+        // 生成子 Agent 列表
+        renderSubagentsList(config.allowAgents || []);
+        
+        document.getElementById('subagentsConfig').style.display = 'block';
+    } catch (e) {
+        console.error('Failed to load subagent config:', e);
+        showNotification('加载配置失败', 'error');
+    }
+};
+
+// 渲染子 Agent 列表
+const renderSubagentsList = (allowAgents) => {
+    const container = document.getElementById('subagentsList');
+    container.innerHTML = '';
+    
+    state.agents.forEach(agent => {
+        const isChecked = allowAgents.includes(agent.name);
+        
+        const item = document.createElement('label');
+        item.className = 'subagent-checkbox-item';
+        item.innerHTML = `
+            <input type="checkbox" value="${agent.name}" ${isChecked ? 'checked' : ''}>
+            <span class="subagent-checkbox-emoji">${agent.display.emoji}</span>
+            <span class="subagent-checkbox-name">${agent.display.name}</span>
+            <span class="subagent-checkbox-id">(${agent.name})</span>
+        `;
+        
+        container.appendChild(item);
+    });
+};
+
+// 保存子 Agent 配置
+window.saveSubagentConfig = async () => {
+    const dispatcherName = document.getElementById('subagentDispatcherSelect').value;
+    
+    if (!dispatcherName) {
+        showNotification('请选择调度者 Agent', 'error');
+        return;
+    }
+    
+    try {
+        // 收集选中的子 Agent
+        const checkboxes = document.querySelectorAll('#subagentsList input[type="checkbox"]:checked');
+        const allowAgents = Array.from(checkboxes).map(cb => cb.value);
+        
+        // 获取最大并发数
+        const maxConcurrent = parseInt(document.getElementById('subagentMaxConcurrent').value) || 4;
+        
+        // 保存配置
+        const result = await api.updateAgentSubagents(dispatcherName, {
+            allowAgents,
+            maxConcurrent
+        });
+        
+        if (result.success) {
+            showNotification('子 Agent 配置已保存', 'success');
+            closeSubagentsManager();
+        } else {
+            showNotification('保存失败: ' + (result.error || 'Unknown error'), 'error');
+        }
+    } catch (e) {
+        console.error('Failed to save subagent config:', e);
+        showNotification('保存失败', 'error');
+    }
+};
+
+// 添加子 Agent 到允许列表（用于创建 Agent 后的自动添加）
+window.addToAllowAgents = async (targetAgent, agentToAdd) => {
+    try {
+        const result = await api.addAgentToAllowAgents(targetAgent, agentToAdd);
+        return result.success;
+    } catch (e) {
+        console.error(`Failed to add ${agentToAdd} to ${targetAgent}'s allowAgents:`, e);
+        return false;
     }
 };

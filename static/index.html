@@ -34,6 +34,48 @@
         </div>
     </aside>
 
+    <!-- Subagents Manager Modal -->
+    <div class="modal-overlay" id="subagentsModal">
+        <div class="modal modal-large">
+            <div class="modal-header">
+                <h3 class="modal-title">🔀 子 Agent 调度管理</h3>
+                <button class="modal-close" onclick="closeSubagentsManager()">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="subagents-manager">
+                    <div class="form-group">
+                        <label>选择调度者 Agent（主 Agent）</label>
+                        <select id="subagentDispatcherSelect" onchange="loadSubagentConfig()">
+                            <option value="">请选择...</option>
+                        </select>
+                        <small class="form-hint">被选中的 Agent 可以调度下面配置的子 Agent</small>
+                    </div>
+                    
+                    <div class="subagents-config" id="subagentsConfig" style="display: none;">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>最大并发数</label>
+                                <input type="number" id="subagentMaxConcurrent" min="1" max="20" value="4">
+                            </div>
+                        </div>
+                        
+                        <div class="section-title" style="margin-top: 20px;">允许的子 Agent 列表</div>
+                        <p class="form-hint">勾选允许被调度的 Agent</p>
+                        
+                        <div class="subagents-list" id="subagentsList">
+                            <!-- 动态生成 -->
+                        </div>
+                        
+                        <div class="form-actions" style="margin-top: 20px;">
+                            <button class="btn btn-secondary" onclick="closeSubagentsManager()">取消</button>
+                            <button class="btn btn-primary" onclick="saveSubagentConfig()">保存配置</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </aside>
+
     <div class="main-content" id="mainContent">
         <header>
             <div class="header-top">
@@ -49,6 +91,10 @@
                     </button>
                 </div>
                 <div class="header-actions">
+                    <button class="manage-subagents-btn" onclick="openSubagentsManager()">
+                        <span>🔀</span>
+                        <span>调度管理</span>
+                    </button>
                     <button class="settings-btn create-agent-btn" onclick="openCreateAgentModal()">
                         <span>➕</span>
                         <span>新建 Agent</span>

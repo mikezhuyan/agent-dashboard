@@ -493,6 +493,134 @@ class OpenClawConfigManager:
             "color": "cyan",
             "description": f"{agent_name} agent"
         }
+    
+    # ============ Subagents 管理方法 ============
+    
+    def get_agent_subagents(self, agent_name: str) -> Dict[str, Any]:
+        """
+        获取指定 Agent 的 subagents 配置
+        
+        Returns:
+            {"allowAgents": [...], "maxConcurrent": int} 或 {}
+        """
+        try:
+            config = self.read_global_config()
+            agent_list = config.get("agents", {}).get("list", [])
+            
+            for agent in agent_list:
+                if agent.get("id") == agent_name:
+                    subagents = agent.get("subagents", {})
+                    return {
+                        "allowAgents": subagents.get("allowAgents", []),
+                        "maxConcurrent": subagents.get("maxConcurrent", 4)
+                    }
+            
+            return {"allowAgents": [], "maxConcurrent": 4}
+        
+        except Exception as e:
+            print(f"[OpenClawConfig] 获取 agent {agent_name} subagents 失败: {e}")
+            return {"allowAgents": [], "maxConcurrent": 4}
+    
+    def update_agent_allow_agents(self, agent_name: str, allow_agents: List[str], max_concurrent: Optional[int] = None) -> bool:
+        """
+        更新指定 Agent 的 allowAgents 列表
+        
+        Args:
+            agent_name: Agent 名称
+            allow_agents: 允许调度的 Agent 列表
+            max_concurrent: 最大并发数（可选）
+        
+        Returns:
+            是否成功
+        """
+        try:
+            config = self.read_global_config()
+            agent_list = config.get("agents", {}).get("list", [])
+            
+            # 查找目标 Agent
+            target_agent = None
+            for agent in agent_list:
+                if agent.get("id") == agent_name:
+                    target_agent = agent
+                    break
+            
+            if not target_agent:
+                print(f"[OpenClawConfig] Agent {agent_name} 不存在")
+                return False
+            
+            # 确保 subagents 字段存在
+            if "subagents" not in target_agent:
+                target_agent["subagents"] = {}
+            
+            # 更新 allowAgents
+            target_agent["subagents"]["allowAgents"] = allow_agents
+            
+            # 可选：更新 maxConcurrent
+            if max_concurrent is not None:
+                target_agent["subagents"]["maxConcurrent"] = max_concurrent
+            
+            # 写入配置
+            return self.write_global_config(config)
+        
+        except Exception as e:
+            print(f"[OpenClawConfig] 更新 agent {agent_name} allowAgents 失败: {e}")
+            return False
+    
+    def add_agent_to_allow_agents(self, target_agent: str, agent_to_add: str) -> bool:
+        """
+        将指定 Agent 添加到目标 Agent 的 allowAgents 列表中
+        
+        Args:
+            target_agent: 目标 Agent（调度者）
+            agent_to_add: 要添加的 Agent（被调度者）
+        
+        Returns:
+            是否成功
+        """
+        try:
+            current = self.get_agent_subagents(target_agent)
+            allow_agents = current.get("allowAgents", [])
+            
+            # 如果已存在，不重复添加
+            if agent_to_add in allow_agents:
+                return True
+            
+            allow_agents.append(agent_to_add)
+            max_concurrent = current.get("maxConcurrent", 4)
+            
+            return self.update_agent_allow_agents(target_agent, allow_agents, max_concurrent)
+        
+        except Exception as e:
+            print(f"[OpenClawConfig] 添加 {agent_to_add} 到 {target_agent} allowAgents 失败: {e}")
+            return False
+    
+    def remove_agent_from_allow_agents(self, target_agent: str, agent_to_remove: str) -> bool:
+        """
+        从目标 Agent 的 allowAgents 列表中移除指定 Agent
+        
+        Args:
+            target_agent: 目标 Agent（调度者）
+            agent_to_remove: 要移除的 Agent（被调度者）
+        
+        Returns:
+            是否成功
+        """
+        try:
+            current = self.get_agent_subagents(target_agent)
+            allow_agents = current.get("allowAgents", [])
+            
+            # 如果不在列表中，直接返回成功
+            if agent_to_remove not in allow_agents:
+                return True
+            
+            allow_agents.remove(agent_to_remove)
+            max_concurrent = current.get("maxConcurrent", 4)
+            
+            return self.update_agent_allow_agents(target_agent, allow_agents, max_concurrent)
+        
+        except Exception as e:
+            print(f"[OpenClawConfig] 从 {target_agent} allowAgents 移除 {agent_to_remove} 失败: {e}")
+            return False
 
 
 # 全局实例

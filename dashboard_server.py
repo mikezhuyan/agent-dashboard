@@ -396,6 +396,102 @@ def agent_config_endpoint(agent_name):
             return jsonify({"success": False, "error": str(e)}), 500
 
 
+# ============ API端点 - Subagents 管理 ============
+
+@app.route('/api/agents/<agent_name>/subagents')
+def get_agent_subagents_endpoint(agent_name):
+    """获取指定 Agent 的 subagents 配置"""
+    if not _validate_agent_name(agent_name):
+        abort(400, "Invalid agent name")
+    
+    try:
+        result = openclaw_config_manager.get_agent_subagents(agent_name)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/agents/<agent_name>/subagents', methods=['POST'])
+def update_agent_subagents_endpoint(agent_name):
+    """更新指定 Agent 的 subagents 配置"""
+    if not _validate_agent_name(agent_name):
+        abort(400, "Invalid agent name")
+    
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "error": "No data provided"}), 400
+        
+        allow_agents = data.get('allowAgents', [])
+        max_concurrent = data.get('maxConcurrent')
+        
+        success = openclaw_config_manager.update_agent_allow_agents(
+            agent_name, allow_agents, max_concurrent
+        )
+        
+        if success:
+            return jsonify({"success": True, "message": f"Subagents updated for {agent_name}"})
+        else:
+            return jsonify({"success": False, "error": "Failed to update subagents"}), 500
+    
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/agents/<agent_name>/subagents/add', methods=['POST'])
+def add_agent_to_subagents_endpoint(agent_name):
+    """将指定 Agent 添加到目标 Agent 的 allowAgents 列表"""
+    if not _validate_agent_name(agent_name):
+        abort(400, "Invalid agent name")
+    
+    try:
+        data = request.get_json()
+        agent_to_add = data.get('agentToAdd')
+        
+        if not agent_to_add:
+            return jsonify({"success": False, "error": "agentToAdd is required"}), 400
+        
+        success = openclaw_config_manager.add_agent_to_allow_agents(agent_name, agent_to_add)
+        
+        if success:
+            return jsonify({
+                "success": True, 
+                "message": f"{agent_to_add} added to {agent_name}'s allowAgents"
+            })
+        else:
+            return jsonify({"success": False, "error": "Failed to add agent"}), 500
+    
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/agents/<agent_name>/subagents/remove', methods=['POST'])
+def remove_agent_from_subagents_endpoint(agent_name):
+    """从目标 Agent 的 allowAgents 列表中移除指定 Agent"""
+    if not _validate_agent_name(agent_name):
+        abort(400, "Invalid agent name")
+    
+    try:
+        data = request.get_json()
+        agent_to_remove = data.get('agentToRemove')
+        
+        if not agent_to_remove:
+            return jsonify({"success": False, "error": "agentToRemove is required"}), 400
+        
+        success = openclaw_config_manager.remove_agent_from_allow_agents(agent_name, agent_to_remove)
+        
+        if success:
+            return jsonify({
+                "success": True, 
+                "message": f"{agent_to_remove} removed from {agent_name}'s allowAgents"
+            })
+        else:
+            return jsonify({"success": False, "error": "Failed to remove agent"}), 500
+    
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 # ============ API端点 - 模型/提供商相关 ============
 
 @app.route('/api/model-providers')
