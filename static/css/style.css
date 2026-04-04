@@ -1435,30 +1435,7 @@ h1 {
 }
 
 /* Drag Handle */
-.agent-card::before {
-    content: '⋮⋮';
-    position: absolute;
-    top: 12px;
-    right: 12px;
-    color: var(--text-muted);
-    font-size: 14px;
-    letter-spacing: 2px;
-    opacity: 0.3;
-    cursor: grab;
-    z-index: 10;
-    padding: 4px 8px;
-    border-radius: 6px;
-    transition: all 0.2s ease;
-}
-
-.agent-card:hover::before {
-    opacity: 0.8;
-    background: rgba(255, 255, 255, 0.1);
-}
-
-.agent-card:active::before {
-    cursor: grabbing;
-}
+/* Note: Drag handle is now a separate element (.drag-handle) positioned at top-left */
 
 /* Responsive for view modes */
 @media (max-width: 768px) {
@@ -1478,4 +1455,218 @@ h1 {
     .view-switcher {
         display: none;
     }
+}
+
+/* ========================================
+   Drag Handle Styles
+   ======================================== */
+
+.drag-handle {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: var(--text-muted);
+    cursor: grab;
+    transition: all 0.2s ease;
+    z-index: 10;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+.drag-handle:hover {
+    background: rgba(0, 212, 255, 0.15);
+    border-color: rgba(0, 212, 255, 0.3);
+    color: var(--accent-cyan);
+    transform: scale(1.05);
+}
+
+.drag-handle:active {
+    cursor: grabbing;
+    transform: scale(0.95);
+}
+
+.drag-handle svg {
+    width: 16px;
+    height: 16px;
+    opacity: 0.7;
+}
+
+.drag-handle:hover svg {
+    opacity: 1;
+}
+
+/* List view drag handle - positioned at top-left */
+.agent-grid.list-view .agent-card {
+    position: relative;
+}
+
+.agent-grid.list-view .drag-handle {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    margin-right: 0;
+}
+
+/* Grid horizontal view drag handle */
+.agent-grid.grid-horizontal .drag-handle {
+    top: 10px;
+    left: 10px;
+}
+
+/* When dragging */
+.agent-card.dragging .drag-handle {
+    opacity: 0.5;
+}
+
+/* ========================================
+   Work Check Button Styles - Redesigned
+   ======================================== */
+
+/* Base button style - Compact floating button */
+.work-check-btn {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(59, 130, 246, 0.15);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    border-radius: 10px;
+    color: #60a5fa;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 10;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+.work-check-btn:hover {
+    background: rgba(59, 130, 246, 0.9);
+    border-color: rgba(59, 130, 246, 0.8);
+    color: white;
+    transform: scale(1.05);
+    box-shadow: 0 4px 20px rgba(59, 130, 246, 0.4);
+}
+
+.work-check-btn:active {
+    transform: scale(0.95);
+}
+
+.work-check-btn.disabled {
+    background: rgba(75, 85, 99, 0.15);
+    border-color: rgba(75, 85, 99, 0.2);
+    color: #6b7280;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.work-check-icon {
+    width: 18px;
+    height: 18px;
+    transition: transform 0.2s ease;
+}
+
+.work-check-btn:hover .work-check-icon {
+    transform: scale(1.1);
+}
+
+/* Tooltip */
+.work-check-tooltip {
+    position: absolute;
+    bottom: -28px;
+    left: 50%;
+    transform: translateX(-50%) scale(0.8);
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 500;
+    white-space: nowrap;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.2s ease;
+    pointer-events: none;
+}
+
+.work-check-tooltip::before {
+    content: '';
+    position: absolute;
+    top: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-bottom: 4px solid rgba(0, 0, 0, 0.8);
+}
+
+.work-check-btn:hover .work-check-tooltip {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) scale(1);
+}
+
+/* Agent card needs relative positioning for absolute button */
+.agent-card {
+    position: relative;
+}
+
+/* List view adjustments - align with drag handle at top */
+.agent-grid.list-view .work-check-btn {
+    top: 12px;
+    right: 12px;
+    transform: none;
+    width: 28px;
+    height: 28px;
+}
+
+.agent-grid.list-view .work-check-btn:hover {
+    transform: scale(1.05);
+}
+
+.agent-grid.list-view .work-check-btn:active {
+    transform: scale(0.95);
+}
+
+.agent-grid.list-view .work-check-icon {
+    width: 14px;
+    height: 14px;
+}
+
+/* Grid horizontal view adjustments */
+.agent-grid.grid-horizontal .work-check-btn {
+    top: 12px;
+    right: 12px;
+    width: 32px;
+    height: 32px;
+}
+
+.agent-grid.grid-horizontal .work-check-icon {
+    width: 16px;
+    height: 16px;
+}
+
+/* Running state indicator for button */
+.agent-card.running .work-check-btn {
+    background: rgba(34, 197, 94, 0.15);
+    border-color: rgba(34, 197, 94, 0.3);
+    color: #4ade80;
+}
+
+.agent-card.running .work-check-btn:hover {
+    background: rgba(34, 197, 94, 0.9);
+    border-color: rgba(34, 197, 94, 0.8);
+    color: white;
+    box-shadow: 0 4px 20px rgba(34, 197, 94, 0.4);
 }

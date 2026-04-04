@@ -12,7 +12,8 @@ const state = {
     currentTab: 'general',
     viewMode: 'grid', // grid, grid-horizontal, list
     agentOrder: [],
-    dragEnabled: true
+    dragEnabled: true,
+    openclawBaseUrl: null  // OpenClaw base URL for work check links
 };
 
 // Utility functions
@@ -167,6 +168,11 @@ const api = {
     async getModelProviders() {
         const response = await fetch('/api/model-providers');
         return response.json();
+    },
+    
+    async getOpenClawUrl() {
+        const response = await fetch('/api/openclaw-url');
+        return response.json();
     }
 };
 
@@ -229,6 +235,16 @@ const renderStats = (stats) => {
     document.getElementById('statsOverview').innerHTML = html;
 };
 
+// Work check function
+window.openWorkCheck = (agentName) => {
+    if (!state.openclawBaseUrl) {
+        showNotification('OpenClaw URL 未配置，请在设置中配置', 'error');
+        return;
+    }
+    const url = `${state.openclawBaseUrl}/chat?session=agent%3A${agentName}%3A${agentName}`;
+    window.open(url, '_blank');
+};
+
 let renderAgentCards = () => {
     const grid = document.getElementById('agentGrid');
     grid.innerHTML = '';
@@ -266,10 +282,27 @@ let renderAgentCards = () => {
         const session = agentStats.lastSession;
         const isRunning = agentStats.isRunning;
         
+        // Generate work check URL
+        const workCheckUrl = state.openclawBaseUrl 
+            ? `${state.openclawBaseUrl}/chat?session=agent%3A${agent.name}%3A${agent.name}`
+            : null;
+        
         const card = document.createElement('div');
         card.className = `agent-card ${isRunning ? 'running' : ''}`;
         card.dataset.agentName = agent.name;
         card.innerHTML = `
+            <!-- Drag Handle -->
+            <div class="drag-handle" title="拖动调整排序">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="9" cy="6" r="1.5" fill="currentColor"/>
+                    <circle cx="9" cy="12" r="1.5" fill="currentColor"/>
+                    <circle cx="9" cy="18" r="1.5" fill="currentColor"/>
+                    <circle cx="15" cy="6" r="1.5" fill="currentColor"/>
+                    <circle cx="15" cy="12" r="1.5" fill="currentColor"/>
+                    <circle cx="15" cy="18" r="1.5" fill="currentColor"/>
+                </svg>
+            </div>
+            
             <div class="agent-header">
                 <div class="agent-identity">
                     <div class="avatar-container" onclick="openAvatarUpload('${agent.name}')">
@@ -297,6 +330,18 @@ let renderAgentCards = () => {
                     </div>
                 </div>
             </div>
+            
+            <!-- Work Check Button -->
+            <button class="work-check-btn ${workCheckUrl ? '' : 'disabled'}" 
+                    onclick="openWorkCheck('${agent.name}')"
+                    ${workCheckUrl ? '' : 'disabled title="OpenClaw URL 未配置"'}
+                    aria-label="工作检查">
+                <svg class="work-check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+                </svg>
+                <span class="work-check-tooltip">对话</span>
+            </button>
+            
             <div class="agent-body">
                 <div class="token-section">
                     <div class="section-title">Token 使用情况</div>
@@ -626,6 +671,16 @@ let loadData = async () => {
             state.viewMode = state.config.view_mode || 'grid';
             state.agentOrder = state.config.agent_order || [];
             console.log('[Load] Loaded agentOrder:', state.agentOrder);
+        }
+        
+        // Load OpenClaw URL
+        try {
+            const openclawUrlData = await api.getOpenClawUrl();
+            state.openclawBaseUrl = openclawUrlData.base_url;
+            console.log('[Load] OpenClaw URL:', state.openclawBaseUrl);
+        } catch (e) {
+            console.warn('[Load] Failed to load OpenClaw URL:', e);
+            state.openclawBaseUrl = null;
         }
         
         // Load agents and stats

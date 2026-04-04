@@ -67,7 +67,8 @@ class ConfigManager:
             }
         },
         "view_mode": "grid",  # grid, grid-horizontal, list
-        "agent_order": []  # 自定义排序，空数组表示按默认顺序
+        "agent_order": [],  # 自定义排序，空数组表示按默认顺序
+        "openclaw_base_url": "http://127.0.0.1:18789"  # OpenClaw 服务基础 URL
     }
     
     def __init__(self, config_path: Optional[str] = None):

@@ -77,6 +77,19 @@ def serve_static(filename):
     return send_from_directory(STATIC_DIR, filename)
 
 
+# ============ API端点 - OpenClaw URL ============
+
+@app.route('/api/openclaw-url')
+def get_openclaw_url():
+    """Get OpenClaw base URL for agent chat links"""
+    config = config_manager.get()
+    base_url = config.get("openclaw_base_url", "http://127.0.0.1:18789")
+    return jsonify({
+        "base_url": base_url,
+        "enabled": bool(base_url)
+    })
+
+
 # ============ API端点 - 配置相关 ============
 
 @app.route('/api/config')
