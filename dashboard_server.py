@@ -96,6 +96,7 @@ def get_openclaw_url():
 def get_config_endpoint():
     """获取Dashboard配置"""
     config = config_manager.get()
+    token_cost = config.get("token_cost", {})
     return jsonify({
         "dashboard_name": config.get("dashboard_name", "Agent Dashboard"),
         "dashboard_subtitle": config.get("dashboard_subtitle", ""),
@@ -103,7 +104,13 @@ def get_config_endpoint():
         "refresh_interval": config.get("refresh_interval", 30),
         "show_cost_estimates": config.get("show_cost_estimates", True),
         "cost_decimal_places": config.get("cost_decimal_places", 4),
-        "currency": config.get("token_cost", {}).get("currency", "CNY"),
+        "currency": token_cost.get("currency", "CNY"),
+        "token_cost": {
+            "input_price_per_1m": token_cost.get("input_price_per_1m", 2.0),
+            "output_price_per_1m": token_cost.get("output_price_per_1m", 8.0),
+            "cache_price_per_1m": token_cost.get("cache_price_per_1m", 1.0),
+            "currency": token_cost.get("currency", "CNY")
+        },
         "agent_configs": config.get("agent_configs", {}),
         "view_mode": config.get("view_mode", "grid"),
         "agent_order": config.get("agent_order", [])
