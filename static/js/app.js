@@ -539,9 +539,10 @@ const loadSettingsForm = () => {
     document.getElementById('settingSubtitle').value = config.dashboard_subtitle;
     document.getElementById('settingRefreshInterval').value = config.refresh_interval;
     document.getElementById('settingShowCost').checked = config.show_cost_estimates;
-    document.getElementById('settingInputPrice').value = config.token_cost?.input_price_per_1m || 2;
-    document.getElementById('settingOutputPrice').value = config.token_cost?.output_price_per_1m || 8;
-    document.getElementById('settingCachePrice').value = config.token_cost?.cache_price_per_1m || 1;
+    // 使用 ?? 空值合并运算符，只有 null/undefined 时才使用默认值（0 是有效值）
+    document.getElementById('settingInputPrice').value = config.token_cost?.input_price_per_1m ?? 2;
+    document.getElementById('settingOutputPrice').value = config.token_cost?.output_price_per_1m ?? 8;
+    document.getElementById('settingCachePrice').value = config.token_cost?.cache_price_per_1m ?? 1;
 };
 
 window.saveSettings = async () => {
