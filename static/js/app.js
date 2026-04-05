@@ -14,7 +14,7 @@ const state = {
     agentOrder: [],
     dragEnabled: true,
     openclawBaseUrl: null,  // OpenClaw base URL for work check links
-    sidebarOpen: false  // 侧边栏展开状态
+    sidebarOpen: false  // Sidebar open state
 };
 
 // Utility functions
@@ -46,7 +46,7 @@ const formatTimeWindow = (start, end) => {
     const endDate = end ? new Date(end) : new Date();
     
     const format = (date) => {
-        return date.toLocaleString('zh-CN', {
+        return date.toLocaleString(I18N.currentLang === 'zh' ? 'zh-CN' : 'en-US', {
             month: 'short',
             day: 'numeric',
             hour: '2-digit',
@@ -54,7 +54,7 @@ const formatTimeWindow = (start, end) => {
         });
     };
     
-    return `${format(startDate)} - ${end ? format(endDate) : '进行中'}`;
+    return `${format(startDate)} - ${end ? format(endDate) : I18N.t('status.running')}`;
 };
 
 const escapeHtml = (text) => {
@@ -103,7 +103,7 @@ const api = {
                 lastError = error;
                 console.warn(`[API] Config update failed (attempt ${i + 1}/${retries}):`, error.message);
                 if (i < retries - 1) {
-                    await new Promise(r => setTimeout(r, 300 * (i + 1))); // 递增延迟
+                    await new Promise(r => setTimeout(r, 300 * (i + 1))); // Incremental delay
                 }
             }
         }
@@ -262,7 +262,7 @@ const createParticles = () => {
     }
 };
 
-// 时间、日期和天气更新
+// Date/time/weather update
 let weatherUpdateInterval = null;
 
 const updateCurrentDate = () => {
@@ -270,22 +270,23 @@ const updateCurrentDate = () => {
     const year = now.getFullYear();
     const month = now.getMonth() + 1;
     const day = now.getDate();
-    const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+    const weekdays = I18N.tArray('datetime.weekdays');
     const weekday = weekdays[now.getDay()];
     
-    // 格式化时间 HH:MM:SS
+    // Format time HH:MM:SS
     const hours = String(now.getHours()).padStart(2, '0');
     const minutes = String(now.getMinutes()).padStart(2, '0');
     const seconds = String(now.getSeconds()).padStart(2, '0');
     
     const dateEl = document.getElementById('currentDate');
-    dateEl.innerHTML = `${year}年${month}月${day}日 ${weekday} <span class="current-time">${hours}:${minutes}:${seconds}</span>`;
+    const formattedDate = I18N.formatDate(now);
+    dateEl.innerHTML = `${formattedDate} <span class="current-time">${hours}:${minutes}:${seconds}</span>`;
 };
 
-// 获取天气信息
+// Get weather info
 const fetchWeather = async (lat, lon, cityName = null) => {
     try {
-        // 使用 wttr.in 免费天气服务
+        // Use wttr.in free weather service
         const location = cityName || `${lat},${lon}`;
         const response = await fetch(`https://wttr.in/${encodeURIComponent(location)}?format=%c+%t+%C+%l`, {
             mode: 'cors'
@@ -296,29 +297,29 @@ const fetchWeather = async (lat, lon, cityName = null) => {
             return parseWeatherData(text);
         }
         
-        // 如果 wttr.in 失败，使用 Open-Meteo（免费，无需 key）
+        // If wttr.in fails, use Open-Meteo (free, no key needed)
         return await fetchOpenMeteo(lat, lon, cityName);
     } catch (e) {
-        console.error('获取天气失败:', e);
+        console.error('Failed to get weather:', e);
         return null;
     }
 };
 
-// 解析 wttr.in 返回的数据
+// Parse wttr.in response
 const parseWeatherData = (text) => {
-    // wttr.in 格式: ☀️ +25°C Sunny Shenzhen, China
+    // wttr.in format: ☀️ +25°C Sunny Shenzhen, China
     const parts = text.trim().split(' ');
     if (parts.length >= 3) {
         const icon = parts[0];
         const temp = parts[1];
         const condition = parts[2];
-        const location = parts.slice(3).join(' ') || '本地';
+        const location = parts.slice(3).join(' ') || I18N.t('weather.local');
         return { icon, temp, condition, location };
     }
     return null;
 };
 
-// 使用 Open-Meteo 获取天气（备选）
+// Use Open-Meteo as fallback
 const fetchOpenMeteo = async (lat, lon, cityName) => {
     try {
         const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code&timezone=auto`;
@@ -337,7 +338,7 @@ const fetchOpenMeteo = async (lat, lon, cityName) => {
             location: cityName || `${lat.toFixed(2)}, ${lon.toFixed(2)}`
         };
     } catch (e) {
-        console.error('Open-Meteo 失败:', e);
+        console.error('Open-Meteo failed:', e);
         return null;
     }
 };
@@ -345,27 +346,27 @@ const fetchOpenMeteo = async (lat, lon, cityName) => {
 // WMO Weather interpretation codes
 const getWeatherIconAndCondition = (code) => {
     const weatherMap = {
-        0: { icon: '☀️', condition: '晴朗' },
-        1: { icon: '🌤️', condition: '多云' },
-        2: { icon: '⛅', condition: '多云' },
-        3: { icon: '☁️', condition: '阴天' },
-        45: { icon: '🌫️', condition: '雾' },
-        48: { icon: '🌫️', condition: '雾' },
-        51: { icon: '🌦️', condition: '毛毛雨' },
-        53: { icon: '🌦️', condition: '小雨' },
-        55: { icon: '🌧️', condition: '中雨' },
-        61: { icon: '🌧️', condition: '小雨' },
-        63: { icon: '🌧️', condition: '中雨' },
-        65: { icon: '⛈️', condition: '大雨' },
-        71: { icon: '🌨️', condition: '小雪' },
-        73: { icon: '🌨️', condition: '中雪' },
-        75: { icon: '❄️', condition: '大雪' },
-        95: { icon: '⛈️', condition: '雷雨' },
+        0: { icon: '☀️', condition: 'Sunny' },
+        1: { icon: '🌤️', condition: 'Partly Cloudy' },
+        2: { icon: '⛅', condition: 'Cloudy' },
+        3: { icon: '☁️', condition: 'Overcast' },
+        45: { icon: '🌫️', condition: 'Fog' },
+        48: { icon: '🌫️', condition: 'Fog' },
+        51: { icon: '🌦️', condition: 'Drizzle' },
+        53: { icon: '🌦️', condition: 'Light Rain' },
+        55: { icon: '🌧️', condition: 'Rain' },
+        61: { icon: '🌧️', condition: 'Light Rain' },
+        63: { icon: '🌧️', condition: 'Rain' },
+        65: { icon: '⛈️', condition: 'Heavy Rain' },
+        71: { icon: '🌨️', condition: 'Light Snow' },
+        73: { icon: '🌨️', condition: 'Snow' },
+        75: { icon: '❄️', condition: 'Heavy Snow' },
+        95: { icon: '⛈️', condition: 'Thunderstorm' },
     };
-    return weatherMap[code] || { icon: '🌡️', condition: '未知' };
+    return weatherMap[code] || { icon: '🌡️', condition: 'Unknown' };
 };
 
-// 通过 IP 获取位置
+// Get location by IP
 const getLocationByIP = async () => {
     try {
         const response = await fetch('https://ipapi.co/json/');
@@ -378,67 +379,67 @@ const getLocationByIP = async () => {
             country: data.country_name
         };
     } catch (e) {
-        console.error('IP 定位失败:', e);
+        console.error('IP location failed:', e);
         return null;
     }
 };
 
-// 反向地理编码：经纬度转城市名
+// Reverse geocode: lat/lon to city name
 const reverseGeocode = async (lat, lon) => {
     try {
-        // 使用 BigDataCloud 免费反向地理编码 API（无需 key，有速率限制）
+        // Use BigDataCloud free reverse geocoding API (no key, rate limited)
         const url = `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=zh`;
         const response = await fetch(url);
         if (!response.ok) throw new Error('Reverse geocoding failed');
         
         const data = await response.json();
-        // 优先返回城市名，如果没有则返回区/县，最后返回省份
+        // Priority: city > locality > principalSubdivision
         return data.city || data.locality || data.principalSubdivision || null;
     } catch (e) {
-        console.error('反向地理编码失败:', e);
+        console.error('Reverse geocoding failed:', e);
         return null;
     }
 };
 
-// 更新天气显示
+// Update weather display
 const updateWeatherDisplay = async () => {
     const weatherEl = document.getElementById('weatherInfo');
     if (!weatherEl) return;
     
-    // 尝试浏览器 Geolocation
+    // Try browser Geolocation
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
             async (position) => {
                 const { latitude, longitude } = position.coords;
-                // 通过反向地理编码获取城市名
+                // Get city name via reverse geocoding
                 const cityName = await reverseGeocode(latitude, longitude);
                 const weather = await fetchWeather(latitude, longitude, cityName);
                 renderWeather(weather);
             },
             async () => {
-                // Geolocation 失败，使用 IP 定位
+                // Geolocation failed, use IP location
                 const location = await getLocationByIP();
                 if (location) {
                     const weather = await fetchWeather(location.lat, location.lon, location.city);
                     renderWeather(weather);
                 } else {
-                    renderWeather(null, '无法获取位置');
+                    renderWeather(null, 'Location unavailable');
                 }
             }
         );
     } else {
-        // 浏览器不支持 Geolocation，使用 IP 定位
+        // Browser doesn't support Geolocation, use IP location
         const location = await getLocationByIP();
         if (location) {
             const weather = await fetchWeather(location.lat, location.lon, location.city);
             renderWeather(weather);
         } else {
-            renderWeather(null, '无法获取位置');
+            renderWeather(null, 'Location unavailable');
         }
     }
 };
 
-// 渲染天气信息
+// Render weather info
 const renderWeather = (weather, error = null) => {
     const weatherEl = document.getElementById('weatherInfo');
     if (!weatherEl) return;
@@ -458,19 +459,19 @@ const renderWeather = (weather, error = null) => {
         <span class="weather-city">${weather.location}</span>
         <span class="weather-temp">${weather.temp}</span>
     `;
-    weatherEl.title = weather.condition || '点击查看详情';
+    weatherEl.title = weather.condition || 'Click for details';
 };
 
-// 启动时间和天气更新
+// Start date/time/weather update
 const startDateTimeWeatherUpdate = () => {
-    // 立即更新一次
+    // Update immediately
     updateCurrentDate();
     updateWeatherDisplay();
     
-    // 每秒更新时间
+    // Update time every second
     setInterval(updateCurrentDate, 1000);
     
-    // 每 10 分钟更新一次天气
+    // Update weather every 10 minutes
     if (weatherUpdateInterval) clearInterval(weatherUpdateInterval);
     weatherUpdateInterval = setInterval(updateWeatherDisplay, 10 * 60 * 1000);
 };
@@ -482,19 +483,19 @@ const renderStats = (stats) => {
     let html = `
         <div class="stat-card">
             <div class="stat-value">${Object.keys(stats.byAgent).length}</div>
-            <div class="stat-label">Agent 总数</div>
+            <div class="stat-label">Total Agents</div>
         </div>
         <div class="stat-card">
             <div class="stat-value" style="color: var(--accent-green)">${stats.runningAgents}</div>
-            <div class="stat-label">运行中</div>
+            <div class="stat-label">Running</div>
         </div>
         <div class="stat-card">
             <div class="stat-value">${formatNumber(stats.totalSessions)}</div>
-            <div class="stat-label">会话总数</div>
+            <div class="stat-label">Total Sessions</div>
         </div>
         <div class="stat-card">
             <div class="stat-value" style="color: var(--accent-purple)">${formatNumber(stats.totalTokens)}</div>
-            <div class="stat-label">总 Token 使用量</div>
+            <div class="stat-label">Total Token Usage</div>
         </div>
     `;
     
@@ -502,7 +503,7 @@ const renderStats = (stats) => {
         html += `
             <div class="stat-card cost-card">
                 <div class="stat-value">${formatCurrency(stats.totalCost.total_cost, currency, 2)}</div>
-                <div class="stat-label">预估总费用</div>
+                <div class="stat-label">Estimated Cost</div>
                 <div class="stat-sublabel">${currency}</div>
             </div>
         `;
@@ -514,14 +515,14 @@ const renderStats = (stats) => {
 // Work check function
 window.openWorkCheck = (agentName) => {
     if (!state.openclawBaseUrl) {
-        showNotification('OpenClaw URL 未配置，请在设置中配置', 'error');
+        showNotification('OpenClaw URL not configured, please configure in settings', 'error');
         return;
     }
     const url = `${state.openclawBaseUrl}/chat?session=agent%3A${agentName}%3A${agentName}`;
     window.open(url, '_blank');
 };
 
-// 渲染侧边栏内容
+// Render sidebar content
 const renderSidebar = (agentName) => {
     const agent = state.agents.find(a => a.name === agentName);
     if (!agent) return;
@@ -542,7 +543,7 @@ const renderSidebar = (agentName) => {
                 <h4>${display.name}</h4>
                 <p>${display.role}</p>
                 <span class="sidebar-status ${agentStats.isRunning ? 'running' : 'idle'}">
-                    ${agentStats.isRunning ? '●' : '○'} ${agentStats.isRunning ? '运行中' : '已结束'}
+                    ${agentStats.isRunning ? '●' : '○'} ${agentStats.isRunning ? 'Running' : 'Idle'}
                 </span>
             </div>
         </div>
@@ -552,15 +553,15 @@ const renderSidebar = (agentName) => {
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
                 </svg>
-                打开对话
+                Open Chat
             </a>
         ` : ''}
         
         <div class="sidebar-section">
-            <h5>📊 Token 统计</h5>
+            <h5>📊 Token Statistics</h5>
             <div class="sidebar-token-total">
                 <span class="token-total-value">${formatNumber(agentStats.tokens || 0)}</span>
-                <span class="token-total-label">总 Tokens</span>
+                <span class="token-total-label">Total Tokens</span>
             </div>
             <div class="sidebar-token-stats">
                 <div class="sidebar-token-item">
@@ -581,14 +582,14 @@ const renderSidebar = (agentName) => {
             </div>
             ${state.config?.show_cost_estimates && agentStats.estimatedCost ? `
                 <div class="sidebar-cost">
-                    <span class="cost-label">预估费用</span>
+                    <span class="cost-label">Est. Cost</span>
                     <span class="cost-value">${formatCurrency(agentStats.estimatedCost.total_cost, agentStats.estimatedCost.currency, 4)}</span>
                 </div>
             ` : ''}
         </div>
         
         <div class="sidebar-section">
-            <h5>💬 会话记录 (${agentStats.sessions || 0})</h5>
+            <h5>💬 Session Records (${agentStats.sessions || 0})</h5>
             <div class="sidebar-task-list" id="sidebar-tasks-${agent.name}">
                 <div class="loading" style="padding: 20px;">
                     <div class="loading-spinner" style="width: 30px; height: 30px;"></div>
@@ -601,7 +602,7 @@ const renderSidebar = (agentName) => {
     loadSidebarTasks(agent.name);
 };
 
-// 加载侧边栏任务列表
+// Load sidebar task list
 const loadSidebarTasks = async (agentName) => {
     try {
         const sessions = await api.getAgentSessions(agentName);
@@ -612,7 +613,7 @@ const loadSidebarTasks = async (agentName) => {
         if (sessionList.length === 0) {
             container.innerHTML = `
                 <div class="sidebar-empty-tasks">
-                    <p>暂无会话记录</p>
+                    <p>No session records</p>
                 </div>
             `;
             return;
@@ -624,8 +625,8 @@ const loadSidebarTasks = async (agentName) => {
         container.innerHTML = sessionList.map(([key, session]) => {
             const status = session.status || 'unknown';
             const statusClass = status === 'done' ? 'success' : status === 'running' ? 'running' : status === 'failed' ? 'error' : 'success';
-            const statusText = status === 'done' ? '完成' : status === 'running' ? '运行中' : status === 'failed' ? '失败' : '完成';
-            const label = session.label || '未命名任务';
+            const statusText = status === 'done' ? 'Done' : status === 'running' ? 'Running' : status === 'failed' ? 'Failed' : 'Done';
+            const label = session.label || 'Unnamed Task';
             
             return `
                 <div class="sidebar-task-item ${statusClass}" onclick="showSessionDetails('${key}', '${escapeHtml(JSON.stringify(session))}')">
@@ -643,13 +644,13 @@ const loadSidebarTasks = async (agentName) => {
     }
 };
 
-// 切换侧边栏
+// Toggle sidebar
 window.toggleSidebar = () => {
     state.sidebarOpen = !state.sidebarOpen;
     document.body.classList.toggle('sidebar-open', state.sidebarOpen);
 };
 
-// 选择 Agent 显示在侧边栏
+// Select agent for sidebar
 window.selectAgent = (agentName) => {
     state.selectedAgent = agentName;
     renderSidebar(agentName);
@@ -666,7 +667,7 @@ let renderAgentCards = () => {
         grid.innerHTML = `
             <div class="empty-state" style="grid-column: 1/-1;">
                 <div class="empty-state-icon">🤖</div>
-                <p>没有找到任何 Agent</p>
+                <p>No agents found</p>
             </div>
         `;
         return;
@@ -707,7 +708,7 @@ let renderAgentCards = () => {
         
         card.innerHTML = `
             <!-- Drag Handle -->
-            <div class="drag-handle" title="拖动调整排序">
+            <div class="drag-handle" title="Drag to reorder">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <circle cx="9" cy="6" r="1.5" fill="currentColor"/>
                     <circle cx="9" cy="12" r="1.5" fill="currentColor"/>
@@ -734,7 +735,7 @@ let renderAgentCards = () => {
                         <div class="agent-name">${display.name}</div>
                         <div class="agent-role">${display.role}</div>
                         <span class="status-badge ${isRunning ? 'running' : 'idle'}">
-                            ${isRunning ? '●' : '○'} ${isRunning ? '运行中' : '已结束'}
+                            ${isRunning ? '●' : '○'} ${isRunning ? 'Running' : 'Idle'}
                         </span>
                         ${agentStats.currentModel ? `
                             <div class="current-model-compact">
@@ -748,17 +749,17 @@ let renderAgentCards = () => {
             <!-- Work Check Button -->
             <button class="work-check-btn" 
                     onclick="event.stopPropagation(); openWorkCheck('${agent.name}')"
-                    ${state.openclawBaseUrl ? '' : 'disabled title="OpenClaw URL 未配置"'}>
+                    ${state.openclawBaseUrl ? '' : 'disabled title="OpenClaw URL not configured"'}>
                 <svg class="work-check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
                 </svg>
-                <span class="work-check-tooltip">对话</span>
+                <span class="work-check-tooltip">Chat</span>
             </button>
             
             <!-- Skills Button -->
             <button class="agent-skills-btn" 
                     onclick="event.stopPropagation(); openSkillsManager('${agent.name}')"
-                    title="管理技能">
+                    title="Manage skills">
                 🛠️
             </button>
             
@@ -770,7 +771,7 @@ let renderAgentCards = () => {
                 </div>
                 <div class="quick-stat">
                     <span class="quick-stat-value">${agentStats.sessions || 0}</span>
-                    <span class="quick-stat-label">会话</span>
+                    <span class="quick-stat-label">Sessions</span>
                 </div>
             </div>
         `;
@@ -789,7 +790,7 @@ const loadAgentTasks = async (agentName) => {
         if (sessionList.length === 0) {
             container.innerHTML = `
                 <div class="empty-state" style="padding: 20px;">
-                    <p>暂无会话记录</p>
+                    <p>No session records</p>
                 </div>
             `;
             return;
@@ -801,9 +802,9 @@ const loadAgentTasks = async (agentName) => {
         container.innerHTML = sessionList.slice(0, 3).map(([key, session]) => {
             const status = session.status || 'unknown';
             const statusClass = status === 'done' ? 'success' : status === 'running' ? 'running' : status === 'failed' ? 'error' : 'success';
-            const statusText = status === 'done' ? '完成' : status === 'running' ? '运行中' : status === 'failed' ? '失败' : '完成';
+            const statusText = status === 'done' ? 'Done' : status === 'running' ? 'Running' : status === 'failed' ? 'Failed' : 'Done';
             const icon = status === 'done' ? '✓' : status === 'running' ? '◉' : status === 'failed' ? '✗' : '✓';
-            const label = session.label || '未命名任务';
+            const label = session.label || 'Unnamed Task';
             
             return `
                 <div class="task-item ${statusClass}" onclick="showSessionDetails('${key}', '${escapeHtml(JSON.stringify(session))}')">
@@ -830,7 +831,7 @@ window.showSessionDetails = (sessionKey, sessionData) => {
         
         const costHtml = session.estimatedCost ? `
             <div class="detail-section">
-                <div class="detail-label">预估费用</div>
+                <div class="detail-label">Est. Cost</div>
                 <div class="detail-value" style="color: var(--accent-green); font-weight: 700;">
                     ${formatCurrency(session.estimatedCost.total_cost, session.estimatedCost.currency, 6)}
                 </div>
@@ -839,11 +840,11 @@ window.showSessionDetails = (sessionKey, sessionData) => {
         
         modalBody.innerHTML = `
             <div class="detail-section">
-                <div class="detail-label">会话 ID</div>
+                <div class="detail-label">Session ID</div>
                 <div class="detail-value code">${session.sessionId || 'N/A'}</div>
             </div>
             <div class="detail-section">
-                <div class="detail-label">状态</div>
+                <div class="detail-label">Status</div>
                 <div class="detail-value">
                     <span class="status-badge ${session.status === 'running' ? 'running' : 'idle'}">
                         ${session.status === 'running' ? '●' : '○'} ${session.status || 'Unknown'}
@@ -851,11 +852,11 @@ window.showSessionDetails = (sessionKey, sessionData) => {
                 </div>
             </div>
             <div class="detail-section">
-                <div class="detail-label">模型</div>
+                <div class="detail-label">Model</div>
                 <div class="detail-value">${session.model || 'Unknown'} (${session.modelProvider || 'Unknown'})</div>
             </div>
             <div class="detail-section">
-                <div class="detail-label">Token 统计</div>
+                <div class="detail-label">Token Stats</div>
                 <div class="detail-value">
                     <div class="token-stats">
                         <div class="token-stat">
@@ -883,16 +884,16 @@ window.showSessionDetails = (sessionKey, sessionData) => {
             </div>
             ${costHtml}
             <div class="detail-section">
-                <div class="detail-label">运行时间</div>
+                <div class="detail-label">Runtime</div>
                 <div class="detail-value">${formatDuration(session.runtimeMs)}</div>
             </div>
             <div class="detail-section">
-                <div class="detail-label">时间窗口</div>
+                <div class="detail-label">Time Window</div>
                 <div class="detail-value">${formatTimeWindow(session.startedAt, session.endedAt)}</div>
             </div>
             ${session.label ? `
             <div class="detail-section">
-                <div class="detail-label">任务标签</div>
+                <div class="detail-label">Task Label</div>
                 <div class="detail-value">${escapeHtml(session.label)}</div>
             </div>
             ` : ''}
@@ -927,7 +928,7 @@ const loadSettingsForm = () => {
     document.getElementById('settingSubtitle').value = config.dashboard_subtitle;
     document.getElementById('settingRefreshInterval').value = config.refresh_interval;
     document.getElementById('settingShowCost').checked = config.show_cost_estimates;
-    // 使用 ?? 空值合并运算符，只有 null/undefined 时才使用默认值（0 是有效值）
+    // Use ?? nullish coalescing operator, only use default for null/undefined (0 is valid)
     document.getElementById('settingInputPrice').value = config.token_cost?.input_price_per_1m ?? 2;
     document.getElementById('settingOutputPrice').value = config.token_cost?.output_price_per_1m ?? 8;
     document.getElementById('settingCachePrice').value = config.token_cost?.cache_price_per_1m ?? 1;
@@ -949,17 +950,17 @@ window.saveSettings = async () => {
     try {
         const result = await api.updateConfig(data);
         if (result.success) {
-            showNotification('设置已保存，页面即将刷新...', 'success');
+            showNotification('Settings saved, page will refresh...', 'success');
             closeSettings();
-            // 延迟1秒后刷新页面，让用户看到通知
+            // Delay 1 second before refresh to show notification
             setTimeout(() => {
                 window.location.reload();
             }, 1000);
         } else {
-            showNotification('保存失败: ' + (result.error || 'Unknown error'), 'error');
+            showNotification('Save failed: ' + (result.error || 'Unknown error'), 'error');
         }
     } catch (e) {
-        showNotification('保存失败: ' + e.message, 'error');
+        showNotification('Save failed: ' + e.message, 'error');
     }
 };
 
@@ -998,28 +999,28 @@ window.uploadAvatar = async () => {
     const file = fileInput.files[0];
     
     if (!file) {
-        showNotification('请选择图片文件', 'error');
+        showNotification('Please select an image file', 'error');
         return;
     }
     
     if (!state.selectedAgent) {
-        showNotification('未选择Agent', 'error');
+        showNotification('No agent selected', 'error');
         return;
     }
     
     try {
         const result = await api.uploadAvatar(state.selectedAgent, file);
         if (result.success) {
-            showNotification('头像上传成功', 'success');
+            showNotification('Avatar uploaded successfully', 'success');
             closeAvatarUpload();
             // Refresh agent cards
             await loadData();
             updateUI();
         } else {
-            showNotification('上传失败: ' + (result.error || 'Unknown error'), 'error');
+            showNotification('Upload failed: ' + (result.error || 'Unknown error'), 'error');
         }
     } catch (e) {
-        showNotification('上传失败: ' + e.message, 'error');
+        showNotification('Upload failed: ' + e.message, 'error');
     }
 };
 
@@ -1084,7 +1085,7 @@ let loadData = async () => {
         return true;
     } catch (e) {
         console.error('Failed to load data:', e);
-        showNotification('数据加载失败', 'error');
+        showNotification('Data loading failed', 'error');
         return false;
     }
 };
@@ -1115,8 +1116,47 @@ const startAutoRefresh = () => {
     }, interval);
 };
 
+// Apply i18n translations to HTML elements
+const applyI18n = () => {
+    // Translate elements with data-i18n attribute
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (key) {
+            const translation = I18N.t(key);
+            if (translation !== key) {
+                el.textContent = translation;
+            }
+        }
+    });
+    
+    // Translate elements with data-i18n-placeholder attribute
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+        const key = el.getAttribute('data-i18n-placeholder');
+        if (key) {
+            const translation = I18N.t(key);
+            if (translation !== key) {
+                el.placeholder = translation;
+            }
+        }
+    });
+    
+    // Translate elements with data-i18n-title attribute
+    document.querySelectorAll('[data-i18n-title]').forEach(el => {
+        const key = el.getAttribute('data-i18n-title');
+        if (key) {
+            const translation = I18N.t(key);
+            if (translation !== key) {
+                el.title = translation;
+            }
+        }
+    });
+};
+
 // Initialization
 document.addEventListener('DOMContentLoaded', async () => {
+    // Apply i18n first
+    applyI18n();
+    
     createParticles();
     startDateTimeWeatherUpdate();
     
@@ -1184,8 +1224,8 @@ window.closeCreateAgentModal = () => {
     document.getElementById('newAgentDescription').value = '';
     document.getElementById('newAgentSystemPrompt').value = '';
     // Reset provider and model selects
-    document.getElementById('newAgentProvider').innerHTML = '<option value="">加载中...</option>';
-    document.getElementById('newAgentModel').innerHTML = '<option value="">请先选择提供商</option>';
+    document.getElementById('newAgentProvider').innerHTML = '<option value="">Loading...</option>';
+    document.getElementById('newAgentModel').innerHTML = '<option value="">Please select provider first</option>';
     modelProviders = [];
 };
 
@@ -1196,7 +1236,7 @@ const loadModelProviders = async () => {
     const modelSelect = document.getElementById('newAgentModel');
     
     try {
-        providerSelect.innerHTML = '<option value="">加载中...</option>';
+        providerSelect.innerHTML = '<option value="">Loading...</option>';
         providerSelect.disabled = true;
         
         const providers = await api.getModelProviders();
@@ -1205,31 +1245,31 @@ const loadModelProviders = async () => {
         providerSelect.disabled = false;
         
         if (!providers || providers.length === 0) {
-            providerSelect.innerHTML = '<option value="">未配置模型提供商</option>';
-            modelSelect.innerHTML = '<option value="">无可用模型</option>';
-            console.warn('[Dashboard] 未在 OpenClaw 配置中找到模型提供商');
+            providerSelect.innerHTML = '<option value="">No model providers configured</option>';
+            modelSelect.innerHTML = '<option value="">No models available</option>';
+            console.warn('[Dashboard] No model providers found in OpenClaw config');
             return;
         }
         
-        providerSelect.innerHTML = '<option value="">请选择提供商</option>';
+        providerSelect.innerHTML = '<option value="">Select provider</option>';
         
         providers.forEach(provider => {
             const option = document.createElement('option');
             option.value = provider.id;
-            option.textContent = `${provider.name} (${provider.models.length} 个模型)`;
+            option.textContent = `${provider.name} (${provider.models.length} models)`;
             providerSelect.appendChild(option);
         });
         
         // Reset model select
-        modelSelect.innerHTML = '<option value="">请先选择提供商</option>';
+        modelSelect.innerHTML = '<option value="">Please select provider first</option>';
         
-        console.log(`[Dashboard] 已加载 ${providers.length} 个模型提供商`);
+        console.log(`[Dashboard] Loaded ${providers.length} model providers`);
     } catch (e) {
         console.error('Failed to load model providers:', e);
         providerSelect.disabled = false;
-        providerSelect.innerHTML = '<option value="">加载失败，请重试</option>';
-        modelSelect.innerHTML = '<option value="">加载失败</option>';
-        showNotification('加载模型提供商失败: ' + e.message, 'error');
+        providerSelect.innerHTML = '<option value="">Loading failed, please retry</option>';
+        modelSelect.innerHTML = '<option value="">Loading failed</option>';
+        showNotification('Failed to load model providers: ' + e.message, 'error');
     }
 };
 
@@ -1238,13 +1278,13 @@ window.onProviderChange = () => {
     const modelSelect = document.getElementById('newAgentModel');
     
     if (!providerId) {
-        modelSelect.innerHTML = '<option value="">请先选择提供商</option>';
+        modelSelect.innerHTML = '<option value="">Please select provider first</option>';
         return;
     }
     
     const provider = modelProviders.find(p => p.id === providerId);
     if (provider) {
-        modelSelect.innerHTML = '<option value="">请选择模型</option>';
+        modelSelect.innerHTML = '<option value="">Select model</option>';
         provider.models.forEach(model => {
             const option = document.createElement('option');
             option.value = model.id;
@@ -1259,18 +1299,18 @@ window.createAgent = async () => {
     const displayName = document.getElementById('newAgentName').value.trim();
     
     if (!agentId) {
-        showNotification('请输入 Agent ID', 'error');
+        showNotification('Please enter Agent ID', 'error');
         return;
     }
     
     if (!displayName) {
-        showNotification('请输入显示名称', 'error');
+        showNotification('Please enter display name', 'error');
         return;
     }
     
     // Validate agent ID format
     if (!/^[a-z0-9_-]+$/.test(agentId)) {
-        showNotification('Agent ID 只能包含小写字母、数字、连字符和下划线', 'error');
+        showNotification('Agent ID can only contain lowercase letters, numbers, hyphens and underscores', 'error');
         return;
     }
     
@@ -1289,17 +1329,17 @@ window.createAgent = async () => {
     try {
         const result = await api.createAgent(data);
         if (result.success) {
-            showNotification(`Agent '${displayName}' 创建成功！`, 'success');
+            showNotification(`Agent '${displayName}' created successfully!`, 'success');
             closeCreateAgentModal();
             // Refresh page to show new agent
             setTimeout(() => {
                 window.location.reload();
             }, 1000);
         } else {
-            showNotification('创建失败: ' + (result.error || 'Unknown error'), 'error');
+            showNotification('Creation failed: ' + (result.error || 'Unknown error'), 'error');
         }
     } catch (e) {
-        showNotification('创建失败: ' + e.message, 'error');
+        showNotification('Creation failed: ' + e.message, 'error');
     }
 };
 
@@ -1579,25 +1619,25 @@ const saveAgentOrder = async () => {
 // Subagents Manager Functions
 // ========================================
 
-// 打开子 Agent 管理器
+// Open subagents manager
 window.openSubagentsManager = () => {
     const modal = document.getElementById('subagentsModal');
     modal.classList.add('active');
     loadDispatcherOptions();
 };
 
-// 关闭子 Agent 管理器
+// Close subagents manager
 window.closeSubagentsManager = () => {
     document.getElementById('subagentsModal').classList.remove('active');
-    // 重置表单
+    // Reset form
     document.getElementById('subagentDispatcherSelect').value = '';
     document.getElementById('subagentsConfig').style.display = 'none';
 };
 
-// 加载调度者选项
+// Load dispatcher options
 const loadDispatcherOptions = () => {
     const select = document.getElementById('subagentDispatcherSelect');
-    select.innerHTML = '<option value="">请选择...</option>';
+    select.innerHTML = '<option value="">Please select...</option>';
     
     state.agents.forEach(agent => {
         const option = document.createElement('option');
@@ -1607,7 +1647,7 @@ const loadDispatcherOptions = () => {
     });
 };
 
-// 加载子 Agent 配置
+// Load subagent config
 window.loadSubagentConfig = async () => {
     const dispatcherSelect = document.getElementById('subagentDispatcherSelect');
     const dispatcherName = dispatcherSelect.value;
@@ -1618,23 +1658,23 @@ window.loadSubagentConfig = async () => {
     }
     
     try {
-        // 获取当前配置
+        // Get current config
         const config = await api.getAgentSubagents(dispatcherName);
         
-        // 设置最大并发数
+        // Set max concurrent
         document.getElementById('subagentMaxConcurrent').value = config.maxConcurrent || 4;
         
-        // 生成子 Agent 列表
+        // Generate subagent list
         renderSubagentsList(config.allowAgents || []);
         
         document.getElementById('subagentsConfig').style.display = 'block';
     } catch (e) {
         console.error('Failed to load subagent config:', e);
-        showNotification('加载配置失败', 'error');
+        showNotification('Failed to load config', 'error');
     }
 };
 
-// 渲染子 Agent 列表
+// Render subagent list
 const renderSubagentsList = (allowAgents) => {
     const container = document.getElementById('subagentsList');
     container.innerHTML = '';
@@ -1655,42 +1695,42 @@ const renderSubagentsList = (allowAgents) => {
     });
 };
 
-// 保存子 Agent 配置
+// Save subagent config
 window.saveSubagentConfig = async () => {
     const dispatcherName = document.getElementById('subagentDispatcherSelect').value;
     
     if (!dispatcherName) {
-        showNotification('请选择调度者 Agent', 'error');
+        showNotification('Please select dispatcher agent', 'error');
         return;
     }
     
     try {
-        // 收集选中的子 Agent
+        // Collect selected subagents
         const checkboxes = document.querySelectorAll('#subagentsList input[type="checkbox"]:checked');
         const allowAgents = Array.from(checkboxes).map(cb => cb.value);
         
-        // 获取最大并发数
+        // Get max concurrent
         const maxConcurrent = parseInt(document.getElementById('subagentMaxConcurrent').value) || 4;
         
-        // 保存配置
+        // Save config
         const result = await api.updateAgentSubagents(dispatcherName, {
             allowAgents,
             maxConcurrent
         });
         
         if (result.success) {
-            showNotification('子 Agent 配置已保存', 'success');
+            showNotification('Subagent config saved', 'success');
             closeSubagentsManager();
         } else {
-            showNotification('保存失败: ' + (result.error || 'Unknown error'), 'error');
+            showNotification('Save failed: ' + (result.error || 'Unknown error'), 'error');
         }
     } catch (e) {
         console.error('Failed to save subagent config:', e);
-        showNotification('保存失败', 'error');
+        showNotification('Save failed', 'error');
     }
 };
 
-// 添加子 Agent 到允许列表（用于创建 Agent 后的自动添加）
+// Add subagent to allow list (for auto-add after creating agent)
 window.addToAllowAgents = async (targetAgent, agentToAdd) => {
     try {
         const result = await api.addAgentToAllowAgents(targetAgent, agentToAdd);
@@ -1770,7 +1810,7 @@ const loadSkillsData = async (agentName) => {
     } catch (e) {
         console.error('Failed to load skills:', e);
         skillsState.agentSkills = [];
-        showNotification('加载技能失败', 'error');
+        showNotification('Failed to load skills', 'error');
     }
 };
 
@@ -1790,18 +1830,18 @@ const renderSkillsModal = (agent) => {
                 </div>
                 <div>
                     <div class="skills-agent-name">${display.name}</div>
-                    <div class="skills-agent-meta">已启用 ${enabledSkills.length} 个技能 · 共 ${skillsState.allSkills.length} 个可用</div>
+                    <div class="skills-agent-meta">${enabledSkills.length} enabled · ${skillsState.allSkills.length} available</div>
                 </div>
             </div>
         </div>
         
         <div class="skills-tabs">
             <button class="skills-tab ${skillsState.activeTab === 'enabled' ? 'active' : ''}" onclick="switchSkillsTab('enabled')">
-                <span>已启用</span>
+                <span>Enabled</span>
                 <span class="tab-count">${enabledSkills.length}</span>
             </button>
             <button class="skills-tab ${skillsState.activeTab === 'available' ? 'active' : ''}" onclick="switchSkillsTab('available')">
-                <span>可用技能</span>
+                <span>Available</span>
                 <span class="tab-count">${availableSkills.length}</span>
             </button>
         </div>
@@ -1811,8 +1851,8 @@ const renderSkillsModal = (agent) => {
                 ${enabledSkills.length === 0 ? `
                     <div class="skills-empty">
                         <div class="skills-empty-icon">🛠️</div>
-                        <h4>暂无已启用的技能</h4>
-                        <p>切换到"可用技能"标签添加技能</p>
+                        <h4>No enabled skills</h4>
+                        <p>Switch to "Available" tab to add skills</p>
                     </div>
                 ` : `
                     <div class="skills-grid">
@@ -1825,8 +1865,8 @@ const renderSkillsModal = (agent) => {
                 ${availableSkills.length === 0 ? `
                     <div class="skills-empty">
                         <div class="skills-empty-icon">✨</div>
-                        <h4>所有技能已启用</h4>
-                        <p>该 Agent 已启用所有可用技能</p>
+                        <h4>All skills enabled</h4>
+                        <p>This agent has all available skills enabled</p>
                     </div>
                 ` : `
                     <div class="skills-grid">
@@ -1841,14 +1881,14 @@ const renderSkillsModal = (agent) => {
 // Render single skill card
 const renderSkillCard = (skill, enabled) => {
     return `
-        <div class="skill-card ${enabled ? 'enabled' : ''}" onclick="toggleSkill('${skill.id}', ${!enabled})" title="${enabled ? '点击禁用' : '点击启用'}">
+        <div class="skill-card ${enabled ? 'enabled' : ''}" onclick="toggleSkill('${skill.id}', ${!enabled})" title="${enabled ? 'Click to disable' : 'Click to enable'}">
             <div class="skill-checkbox"></div>
             <div class="skill-icon">${skill.emoji}</div>
             <div class="skill-info">
                 <div class="skill-name">${skill.name}</div>
                 <div class="skill-desc">${skill.description || 'No description'}</div>
             </div>
-            <span class="skill-source ${skill.source}">${skill.source === 'builtin' ? '内置' : '自定义'}</span>
+            <span class="skill-source ${skill.source}">${skill.source === 'builtin' ? 'Built-in' : 'Custom'}</span>
         </div>
     `;
 };
@@ -1882,11 +1922,11 @@ window.toggleSkill = async (skillId, enable) => {
             const agent = state.agents.find(a => a.name === skillsState.currentAgent);
             renderSkillsModal(agent);
         } else {
-            showNotification(result.error || '操作失败', 'error');
+            showNotification(result.error || 'Operation failed', 'error');
         }
     } catch (e) {
         console.error('Failed to toggle skill:', e);
-        showNotification('操作失败', 'error');
+        showNotification('Operation failed', 'error');
     }
 };
 
@@ -1897,7 +1937,7 @@ window.openSkillDetail = async (skillId) => {
         const data = await response.json();
         
         if (!data.success || !data.skill) {
-            showNotification('技能详情加载失败', 'error');
+            showNotification('Failed to load skill details', 'error');
             return;
         }
         
@@ -1905,7 +1945,7 @@ window.openSkillDetail = async (skillId) => {
         const modalBody = document.getElementById('skillDetailBody');
         
         // Convert markdown-like content to HTML (basic)
-        let contentHtml = skill.content || '暂无详细说明';
+        let contentHtml = skill.content || 'No detailed description available';
         // Simple markdown to HTML conversion
         contentHtml = contentHtml
             .replace(/^## (.*$)/gim, '<h2>$1</h2>')
@@ -1918,7 +1958,7 @@ window.openSkillDetail = async (skillId) => {
         
         modalBody.innerHTML = `
             <button class="skill-detail-back" onclick="closeSkillDetail()">
-                <span>←</span> 返回
+                <span>←</span> Back
             </button>
             <div class="skill-detail-header">
                 <div class="skill-detail-icon">${skill.emoji}</div>
@@ -1936,7 +1976,7 @@ window.openSkillDetail = async (skillId) => {
         document.getElementById('skillDetailModal').classList.add('active');
     } catch (e) {
         console.error('Failed to load skill detail:', e);
-        showNotification('加载技能详情失败', 'error');
+        showNotification('Failed to load skill details', 'error');
     }
 };
 
@@ -1965,10 +2005,10 @@ window.installSkill = async (skillId) => {
             const agent = state.agents.find(a => a.name === skillsState.currentAgent);
             renderSkillsModal(agent);
         } else {
-            showNotification(result.error || '安装失败', 'error');
+            showNotification(result.error || 'Installation failed', 'error');
         }
     } catch (e) {
         console.error('Failed to install skill:', e);
-        showNotification('安装失败', 'error');
+        showNotification('Installation failed', 'error');
     }
 };
