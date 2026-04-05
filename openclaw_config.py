@@ -2,6 +2,8 @@
 """
 OpenClaw Configuration Manager
 管理 OpenClaw 的配置文件读写，支持 Agent 创建和配置同步
+
+集成 OpenClaw 官方 JSON Schema 验证，确保配置合法性
 """
 
 import json
@@ -12,12 +14,19 @@ from typing import Dict, Any, Optional, List
 from datetime import datetime
 
 from openclaw_finder import get_finder
+from openclaw_schema import (
+    validate_config as validate_openclaw_config,
+    validate_agent_config as validate_openclaw_agent_config,
+    RESERVED_KEYWORDS,
+    AGENT_ID_PATTERN,
+    AGENT_ID_MAX_LENGTH
+)
 
 
 class OpenClawConfigManager:
-    """OpenClaw 配置管理器"""
+    """OpenClaw 配置管理器 - 集成官方 Schema 验证"""
     
-    def __init__(self):
+    def __init__(self, skip_validation: bool = False):
         self.finder = get_finder()
         self.openclaw_home = self.finder.find_primary()
         
@@ -27,9 +36,80 @@ class OpenClawConfigManager:
         self.config_file = self.openclaw_home / "openclaw.json"
         self.agents_dir = self.openclaw_home / "agents"
         self.backup_dir = self.openclaw_home / ".dashboard-backups"
+        self.skip_validation = skip_validation
         
         # 确保备份目录存在
         self.backup_dir.mkdir(parents=True, exist_ok=True)
+    
+    def validate_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        验证 OpenClaw 配置是否符合官方 Schema
+        
+        Returns:
+            {"valid": bool, "errors": [], "warnings": []}
+        """
+        if self.skip_validation:
+            return {"valid": True, "errors": [], "warnings": []}
+        return validate_openclaw_config(config)
+    
+    def validate_agent_config(self, agent_config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        验证单个 Agent 配置是否符合官方 Schema
+        
+        Returns:
+            {"valid": bool, "errors": [], "warnings": []}
+        """
+        if self.skip_validation:
+            return {"valid": True, "errors": [], "warnings": []}
+        return validate_openclaw_agent_config(agent_config)
+    
+    def check_agent_name_valid(self, name: str) -> Dict[str, Any]:
+        """
+        检查 agent 名称是否合法
+        
+        Returns:
+            {"valid": bool, "error": str|None, "warnings": []}
+        """
+        errors = []
+        warnings = []
+        
+        # 检查空值
+        if not name or not isinstance(name, str):
+            return {"valid": False, "error": "Agent 名称不能为空", "warnings": []}
+        
+        # 检查长度
+        if len(name) > AGENT_ID_MAX_LENGTH:
+            errors.append(f"名称长度不能超过 {AGENT_ID_MAX_LENGTH} 字符")
+        
+        # 检查命名规则
+        if not AGENT_ID_PATTERN.match(name):
+            errors.append(
+                f"命名不合法: 必须以字母开头，只能包含字母、数字、连字符(-)和下划线(_)"
+            )
+        
+        # 检查保留字
+        if name.lower() in RESERVED_KEYWORDS:
+            errors.append(f"'{name}' 是保留字，不能使用")
+        
+        # 检查常见非法模式
+        if name.startswith("-") or name.startswith("_"):
+            errors.append("名称不能以连字符或下划线开头")
+        
+        if name.endswith("-") or name.endswith("_"):
+            warnings.append("名称以连字符或下划线结尾，虽然合法但不推荐")
+        
+        # 检查连续特殊字符
+        if "--" in name or "__" in name:
+            warnings.append("名称包含连续的连字符或下划线，虽然合法但不推荐")
+        
+        if errors:
+            return {
+                "valid": False,
+                "error": "; ".join(errors),
+                "warnings": warnings
+            }
+        
+        return {"valid": True, "error": None, "warnings": warnings}
     
     def read_global_config(self) -> Dict[str, Any]:
         """读取 OpenClaw 全局配置"""
@@ -65,9 +145,28 @@ class OpenClawConfigManager:
             print(f"[OpenClawConfig] 备份配置失败: {e}")
             return None
     
-    def write_global_config(self, config: Dict[str, Any]) -> bool:
-        """写入 OpenClaw 全局配置（带备份）"""
+    def write_global_config(self, config: Dict[str, Any], validate: bool = True) -> bool:
+        """
+        写入 OpenClaw 全局配置（带备份和可选验证）
+        
+        Args:
+            config: 要写入的配置
+            validate: 是否进行 schema 验证（默认开启）
+        """
         try:
+            # Schema 验证
+            if validate and not self.skip_validation:
+                result = self.validate_config(config)
+                if not result["valid"]:
+                    print(f"[OpenClawConfig] 配置验证失败:")
+                    for error in result["errors"]:
+                        print(f"  - {error}")
+                    return False
+                if result["warnings"]:
+                    print(f"[OpenClawConfig] 配置警告:")
+                    for warning in result["warnings"]:
+                        print(f"  - {warning}")
+            
             # 先备份
             self.backup_config()
             
@@ -85,12 +184,24 @@ class OpenClawConfigManager:
             print(f"[OpenClawConfig] 写入全局配置失败: {e}")
             return False
     
-    def add_agent_to_config(self, agent_name: str, agent_config: Dict[str, Any]) -> bool:
+    def add_agent_to_config(self, agent_name: str, agent_config: Dict[str, Any], 
+                             validate: bool = True) -> bool:
         """
         添加 Agent 到 OpenClaw 全局配置
         只添加新的 agent 到 agents.list，不修改其他配置
+        
+        Args:
+            agent_name: Agent 名称
+            agent_config: Agent 配置数据
+            validate: 是否进行 schema 验证
         """
         try:
+            # 验证 agent 名称
+            name_check = self.check_agent_name_valid(agent_name)
+            if not name_check["valid"]:
+                print(f"[OpenClawConfig] Agent 名称验证失败: {name_check['error']}")
+                return False
+            
             config = self.read_global_config()
             
             # 确保 agents 部分存在
@@ -121,6 +232,18 @@ class OpenClawConfigManager:
                 }
             }
             
+            # Schema 验证
+            if validate and not self.skip_validation:
+                result = self.validate_agent_config(new_agent_config)
+                if not result["valid"]:
+                    print(f"[OpenClawConfig] Agent 配置验证失败:")
+                    for error in result["errors"]:
+                        print(f"  - {error}")
+                    return False
+                if result["warnings"]:
+                    for warning in result["warnings"]:
+                        print(f"[OpenClawConfig] 警告: {warning}")
+            
             # Note: system prompt 不保存在 openclaw.json 中
             # 它只保存在 metadata.json 中供 Dashboard 使用
             # OpenClaw 从 sessions 或 AGENTS.md 读取 system prompt
@@ -136,7 +259,7 @@ class OpenClawConfigManager:
                 print(f"[OpenClawConfig] 添加新 agent 配置: {agent_name}")
             
             # 写入配置
-            return self.write_global_config(config)
+            return self.write_global_config(config, validate=validate)
         
         except Exception as e:
             print(f"[OpenClawConfig] 添加 agent 到配置失败: {e}")
@@ -243,9 +366,14 @@ class OpenClawConfigManager:
         Returns:
             创建结果
         """
-        # 验证 agent 名称
-        if not self._validate_agent_name(agent_name):
-            return {"success": False, "error": "Invalid agent name. Use only letters, numbers, hyphens and underscores."}
+        # 验证 agent 名称（使用官方命名规则）
+        name_check = self.check_agent_name_valid(agent_name)
+        if not name_check["valid"]:
+            return {"success": False, "error": f"非法的 Agent 名称: {name_check['error']}"}
+        
+        if name_check["warnings"]:
+            for warning in name_check["warnings"]:
+                print(f"[OpenClawConfig] 警告: {warning}")
         
         agent_dir = self.agents_dir / agent_name
         workspace_dir = self.openclaw_home / f"workspace-{agent_name}"
@@ -423,13 +551,12 @@ class OpenClawConfigManager:
             return {"success": False, "error": str(e)}
     
     def _validate_agent_name(self, name: str) -> bool:
-        """验证 agent 名称是否合法"""
-        if not name or not isinstance(name, str):
-            return False
-        
-        # 只允许字母、数字、连字符和下划线
-        import re
-        return bool(re.match(r'^[a-zA-Z0-9_-]+$', name))
+        """
+        验证 agent 名称是否合法（向后兼容方法）
+        使用官方命名规则进行验证
+        """
+        result = self.check_agent_name_valid(name)
+        return result["valid"]
     
     def sync_agents_to_dashboard(self, dashboard_config_manager) -> Dict[str, Any]:
         """
@@ -627,11 +754,16 @@ class OpenClawConfigManager:
 _config_manager_instance: Optional[OpenClawConfigManager] = None
 
 
-def get_openclaw_config_manager() -> OpenClawConfigManager:
-    """获取全局 OpenClaw 配置管理器"""
+def get_openclaw_config_manager(skip_validation: bool = False) -> OpenClawConfigManager:
+    """
+    获取全局 OpenClaw 配置管理器
+    
+    Args:
+        skip_validation: 是否跳过 schema 验证（用于开发调试）
+    """
     global _config_manager_instance
     if _config_manager_instance is None:
-        _config_manager_instance = OpenClawConfigManager()
+        _config_manager_instance = OpenClawConfigManager(skip_validation=skip_validation)
     return _config_manager_instance
 
 
