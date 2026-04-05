@@ -454,10 +454,16 @@ const renderWeather = (weather, error = null) => {
         return;
     }
     
+    // Truncate location if too long
+    let location = weather.location || 'Local';
+    if (location.length > 15) {
+        location = location.substring(0, 12) + '...';
+    }
+    
     weatherEl.innerHTML = `
         <span class="weather-icon">${weather.icon}</span>
-        <span class="weather-city">${weather.location}</span>
         <span class="weather-temp">${weather.temp}</span>
+        <span class="weather-city">${location}</span>
     `;
     weatherEl.title = weather.condition || 'Click for details';
 };
