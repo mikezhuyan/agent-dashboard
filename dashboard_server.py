@@ -14,6 +14,7 @@ from flask import Flask, jsonify, request, send_from_directory, abort
 from openclaw_finder import get_finder, find_openclaw_home
 from config import get_config_manager, get_config
 from openclaw_config import get_openclaw_config_manager
+from openclaw_skills import get_skills_manager
 
 app = Flask(__name__)
 
@@ -31,6 +32,7 @@ config_manager = get_config_manager()
 openclaw_config_manager = get_openclaw_config_manager()
 finder = get_finder()
 openclaw_home = finder.find_primary()
+skills_manager = get_skills_manager(openclaw_home)
 
 # 检查 OpenClaw 版本
 MIN_OPENCLAW_VERSION = "2026.3.24"
@@ -735,6 +737,127 @@ def print_startup_info():
     
     print("\nPress Ctrl+C to stop")
     print("=" * 60)
+
+
+# ============ API端点 - 技能管理 ============
+
+@app.route('/api/skills')
+def list_skills():
+    """获取所有可用技能列表"""
+    try:
+        skills = skills_manager.get_all_available_skills()
+        return jsonify({
+            "success": True,
+            "skills": [skill.to_dict() for skill in skills]
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/skills/<skill_id>')
+def get_skill_detail(skill_id):
+    """获取技能详细信息"""
+    try:
+        detail = skills_manager.get_skill_detail(skill_id)
+        if not detail:
+            return jsonify({"success": False, "error": f"Skill '{skill_id}' not found"}), 404
+        return jsonify({"success": True, "skill": detail})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/agents/<agent_name>/skills')
+def get_agent_skills(agent_name):
+    """获取指定 Agent 的技能列表（包括启用状态）"""
+    if not _validate_agent_name(agent_name):
+        abort(400, "Invalid agent name")
+    
+    try:
+        # 读取全局配置
+        config = openclaw_config_manager.read_global_config()
+        skills = skills_manager.get_agent_skills(agent_name, config)
+        return jsonify({
+            "success": True,
+            "agent": agent_name,
+            "skills": skills
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/agents/<agent_name>/skills/<skill_id>/enable', methods=['POST'])
+def enable_agent_skill(agent_name, skill_id):
+    """为指定 Agent 启用技能"""
+    if not _validate_agent_name(agent_name):
+        abort(400, "Invalid agent name")
+    
+    try:
+        success, message = skills_manager.enable_skill_for_agent(agent_name, skill_id)
+        if success:
+            return jsonify({"success": True, "message": message})
+        else:
+            return jsonify({"success": False, "error": message}), 400
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/agents/<agent_name>/skills/<skill_id>/disable', methods=['POST'])
+def disable_agent_skill(agent_name, skill_id):
+    """为指定 Agent 禁用技能"""
+    if not _validate_agent_name(agent_name):
+        abort(400, "Invalid agent name")
+    
+    try:
+        success, message = skills_manager.disable_skill_for_agent(agent_name, skill_id)
+        if success:
+            return jsonify({"success": True, "message": message})
+        else:
+            return jsonify({"success": False, "error": message}), 400
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/agents/<agent_name>/skills/install', methods=['POST'])
+def install_agent_skill(agent_name):
+    """为 Agent 安装新技能（调用 OpenClaw CLI）"""
+    if not _validate_agent_name(agent_name):
+        abort(400, "Invalid agent name")
+    
+    try:
+        data = request.get_json()
+        skill_id = data.get('skillId')
+        
+        if not skill_id:
+            return jsonify({"success": False, "error": "skillId is required"}), 400
+        
+        # 调用 OpenClaw CLI 安装技能
+        import subprocess
+        result = subprocess.run(
+            ['openclaw', 'skills', 'install', skill_id],
+            capture_output=True,
+            text=True,
+            timeout=120
+        )
+        
+        if result.returncode == 0:
+            # 安装成功后，自动启用该技能
+            skills_manager.enable_skill_for_agent(agent_name, skill_id)
+            return jsonify({
+                "success": True, 
+                "message": f"Skill '{skill_id}' installed and enabled for '{agent_name}'",
+                "output": result.stdout
+            })
+        else:
+            return jsonify({
+                "success": False, 
+                "error": f"Failed to install skill: {result.stderr}",
+                "output": result.stdout
+            }), 500
+            
+    except subprocess.TimeoutExpired:
+        return jsonify({"success": False, "error": "Skill installation timeout"}), 500
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 if __name__ == '__main__':

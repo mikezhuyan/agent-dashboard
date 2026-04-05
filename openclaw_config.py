@@ -294,11 +294,15 @@ class OpenClawConfigManager:
                         config["tools"] = {}
                     if "agentToAgent" not in config["tools"]:
                         config["tools"]["agentToAgent"] = {"enabled": True, "allow": []}
+                    
+                    # 确保 enabled 为 true
+                    config["tools"]["agentToAgent"]["enabled"] = True
+                    
                     if "allow" not in config["tools"]["agentToAgent"]:
                         config["tools"]["agentToAgent"]["allow"] = []
                     if agent_name not in config["tools"]["agentToAgent"]["allow"]:
                         config["tools"]["agentToAgent"]["allow"].append(agent_name)
-                        print(f"[OpenClawConfig] 将 {agent_name} 添加到 tools.agentToAgent.allow")
+                        print(f"[OpenClawConfig] 将 {agent_name} 添加到 tools.agentToAgent.allow，并确保 enabled=true")
             
             # 写入配置
             return self.write_global_config(config, validate=validate)
