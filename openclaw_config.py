@@ -185,15 +185,18 @@ class OpenClawConfigManager:
             return False
     
     def add_agent_to_config(self, agent_name: str, agent_config: Dict[str, Any], 
-                             validate: bool = True) -> bool:
+                             validate: bool = True,
+                             add_to_subagents: bool = True,
+                             add_to_agent_to_agent: bool = True) -> bool:
         """
         添加 Agent 到 OpenClaw 全局配置
-        只添加新的 agent 到 agents.list，不修改其他配置
         
         Args:
             agent_name: Agent 名称
             agent_config: Agent 配置数据
             validate: 是否进行 schema 验证
+            add_to_subagents: 是否将新 agent 添加到其他 agent 的 subagents.allowAgents 中
+            add_to_agent_to_agent: 是否将新 agent 添加到 tools.agentToAgent.allow 中
         """
         try:
             # 验证 agent 名称
@@ -248,6 +251,8 @@ class OpenClawConfigManager:
             # 它只保存在 metadata.json 中供 Dashboard 使用
             # OpenClaw 从 sessions 或 AGENTS.md 读取 system prompt
             
+            is_new_agent = existing_idx is None
+            
             # 添加或更新
             if existing_idx is not None:
                 # 保留原有配置，只更新指定字段
@@ -258,6 +263,43 @@ class OpenClawConfigManager:
                 agent_list.append(new_agent_config)
                 print(f"[OpenClawConfig] 添加新 agent 配置: {agent_name}")
             
+            # 新 agent 需要同步到 subagents 和 agentToAgent
+            if is_new_agent:
+                # 1. 将新 agent 添加到所有现有 agent 的 subagents.allowAgents 中
+                if add_to_subagents:
+                    for agent in agent_list:
+                        if agent.get("id") != agent_name:  # 不添加到自己
+                            if "subagents" not in agent:
+                                agent["subagents"] = {}
+                            if "allowAgents" not in agent["subagents"]:
+                                agent["subagents"]["allowAgents"] = []
+                            if agent_name not in agent["subagents"]["allowAgents"]:
+                                agent["subagents"]["allowAgents"].append(agent_name)
+                                print(f"[OpenClawConfig] 将 {agent_name} 添加到 {agent['id']}.subagents.allowAgents")
+                    
+                    # 同时添加到 defaults.subagents.allowAgents（如果存在 defaults）
+                    defaults = config.get("agents", {}).get("defaults", {})
+                    if defaults:
+                        if "subagents" not in defaults:
+                            defaults["subagents"] = {}
+                        if "allowAgents" not in defaults["subagents"]:
+                            defaults["subagents"]["allowAgents"] = []
+                        if agent_name not in defaults["subagents"]["allowAgents"]:
+                            defaults["subagents"]["allowAgents"].append(agent_name)
+                            print(f"[OpenClawConfig] 将 {agent_name} 添加到 agents.defaults.subagents.allowAgents")
+                
+                # 2. 将新 agent 添加到 tools.agentToAgent.allow
+                if add_to_agent_to_agent:
+                    if "tools" not in config:
+                        config["tools"] = {}
+                    if "agentToAgent" not in config["tools"]:
+                        config["tools"]["agentToAgent"] = {"enabled": True, "allow": []}
+                    if "allow" not in config["tools"]["agentToAgent"]:
+                        config["tools"]["agentToAgent"]["allow"] = []
+                    if agent_name not in config["tools"]["agentToAgent"]["allow"]:
+                        config["tools"]["agentToAgent"]["allow"].append(agent_name)
+                        print(f"[OpenClawConfig] 将 {agent_name} 添加到 tools.agentToAgent.allow")
+            
             # 写入配置
             return self.write_global_config(config, validate=validate)
         
@@ -265,10 +307,16 @@ class OpenClawConfigManager:
             print(f"[OpenClawConfig] 添加 agent 到配置失败: {e}")
             return False
     
-    def remove_agent_from_config(self, agent_name: str) -> bool:
+    def remove_agent_from_config(self, agent_name: str,
+                                   remove_from_subagents: bool = True,
+                                   remove_from_agent_to_agent: bool = True) -> bool:
         """
         从 OpenClaw 全局配置中移除 Agent
-        只从 agents.list 中移除，不修改其他配置
+        
+        Args:
+            agent_name: Agent 名称
+            remove_from_subagents: 是否从其他 agent 的 subagents.allowAgents 中移除
+            remove_from_agent_to_agent: 是否从 tools.agentToAgent.allow 中移除
         """
         try:
             config = self.read_global_config()
@@ -287,6 +335,30 @@ class OpenClawConfigManager:
             
             if len(config["agents"]["list"]) < original_len:
                 print(f"[OpenClawConfig] 从配置中移除 agent: {agent_name}")
+                
+                # 从其他 agent 的 subagents.allowAgents 中移除
+                if remove_from_subagents:
+                    for agent in config["agents"]["list"]:
+                        if "subagents" in agent and "allowAgents" in agent["subagents"]:
+                            if agent_name in agent["subagents"]["allowAgents"]:
+                                agent["subagents"]["allowAgents"].remove(agent_name)
+                                print(f"[OpenClawConfig] 从 {agent['id']}.subagents.allowAgents 移除 {agent_name}")
+                    
+                    # 从 defaults.subagents.allowAgents 中移除
+                    defaults = config.get("agents", {}).get("defaults", {})
+                    if defaults and "subagents" in defaults and "allowAgents" in defaults["subagents"]:
+                        if agent_name in defaults["subagents"]["allowAgents"]:
+                            defaults["subagents"]["allowAgents"].remove(agent_name)
+                            print(f"[OpenClawConfig] 从 agents.defaults.subagents.allowAgents 移除 {agent_name}")
+                
+                # 从 tools.agentToAgent.allow 中移除
+                if remove_from_agent_to_agent:
+                    tools_config = config.get("tools", {})
+                    if "agentToAgent" in tools_config and "allow" in tools_config["agentToAgent"]:
+                        if agent_name in tools_config["agentToAgent"]["allow"]:
+                            tools_config["agentToAgent"]["allow"].remove(agent_name)
+                            print(f"[OpenClawConfig] 从 tools.agentToAgent.allow 移除 {agent_name}")
+                
                 return self.write_global_config(config)
             
             return True
@@ -560,19 +632,22 @@ class OpenClawConfigManager:
     
     def sync_agents_to_dashboard(self, dashboard_config_manager) -> Dict[str, Any]:
         """
-        将 OpenClaw 的 agent 同步到 Dashboard 配置
+        从 OpenClaw 读取 agent 配置，仅用于显示，不修改 Dashboard 配置文件
         
-        读取 OpenClaw 中所有 agent 的 metadata，同步到 Dashboard 的 agent_configs
+        读取 OpenClaw 中所有 agent 的 metadata，生成显示配置，
+        但不会写入到 Dashboard 的配置文件中（data/config.json）
+        
+        如果需要持久化到配置文件，请使用 save_agent_display_config() 方法
         """
         agents = self.get_all_agents()
-        sync_count = 0
+        agent_configs = {}
         
         for agent in agents:
             agent_name = agent["name"]
             metadata = self.read_agent_metadata(agent_name)
             
             if metadata:
-                # 从 metadata 构建 dashboard 配置
+                # 从 metadata 构建 dashboard 显示配置
                 dashboard_config = {
                     "name": metadata.get("display_name", agent_name),
                     "role": metadata.get("role", "Agent"),
@@ -584,20 +659,34 @@ class OpenClawConfigManager:
                 # 没有 metadata，使用默认配置
                 dashboard_config = self._get_default_dashboard_config(agent_name)
             
-            # 更新 dashboard 配置
-            updates = {
-                "agent_configs": {
-                    agent_name: dashboard_config
-                }
-            }
-            
-            if dashboard_config_manager.update(updates):
-                sync_count += 1
+            agent_configs[agent_name] = dashboard_config
+        
+        # 只更新内存中的配置，不写入文件
+        # 获取当前的 dashboard 配置
+        current_config = dashboard_config_manager.get()
+        
+        # 合并 OpenClaw 的 agent 配置到内存中
+        # 优先保留 Dashboard 配置文件中已有的配置
+        merged_configs = {}
+        existing_configs = current_config.get("agent_configs", {})
+        
+        for agent_name, oc_config in agent_configs.items():
+            if agent_name in existing_configs:
+                # 如果 Dashboard 配置文件中已有该 agent，保留现有配置
+                merged_configs[agent_name] = existing_configs[agent_name]
+            else:
+                # 如果 Dashboard 配置文件中没有该 agent，使用 OpenClaw 的配置
+                merged_configs[agent_name] = oc_config
+        
+        # 只更新内存中的配置
+        current_config["agent_configs"] = merged_configs
+        dashboard_config_manager._config = current_config
         
         return {
             "success": True,
-            "synced_count": sync_count,
-            "total_agents": len(agents)
+            "synced_count": len(agent_configs),
+            "total_agents": len(agents),
+            "message": "配置已加载到内存，未写入配置文件"
         }
     
     def _get_default_dashboard_config(self, agent_name: str) -> Dict[str, str]:
@@ -620,6 +709,35 @@ class OpenClawConfigManager:
             "color": "cyan",
             "description": f"{agent_name} agent"
         }
+    
+    def get_agents_display_config(self) -> Dict[str, Dict[str, Any]]:
+        """
+        获取所有 agent 的显示配置（从 OpenClaw 读取，不修改任何配置文件）
+        
+        Returns:
+            {agent_name: display_config}
+        """
+        agents = self.get_all_agents()
+        result = {}
+        
+        for agent in agents:
+            agent_name = agent["name"]
+            metadata = self.read_agent_metadata(agent_name)
+            
+            if metadata:
+                display_config = {
+                    "name": metadata.get("display_name", agent_name),
+                    "role": metadata.get("role", "Agent"),
+                    "emoji": metadata.get("emoji", "🤖"),
+                    "color": metadata.get("color", "cyan"),
+                    "description": metadata.get("description", ""),
+                }
+            else:
+                display_config = self._get_default_dashboard_config(agent_name)
+            
+            result[agent_name] = display_config
+        
+        return result
     
     # ============ Subagents 管理方法 ============
     

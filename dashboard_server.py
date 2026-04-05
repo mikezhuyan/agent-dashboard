@@ -56,10 +56,17 @@ def _validate_agent_name(agent_name: str) -> bool:
 
 
 def sync_openclaw_agents():
-    """启动时从 OpenClaw 同步 agent 配置"""
-    print("[Sync] 正在从 OpenClaw 同步 Agent 配置...")
+    """
+    启动时从 OpenClaw 加载 agent 配置到内存
+    
+    注意：此操作只加载到内存，不会修改 Dashboard 的配置文件 (data/config.json)
+    显示的 agents 完全以 OpenClaw 配置文件 (openclaw.json) 中的 agents.list 为准
+    """
+    print("[Sync] 正在从 OpenClaw 加载 Agent 配置...")
     result = openclaw_config_manager.sync_agents_to_dashboard(config_manager)
-    print(f"[Sync] 同步完成: {result['synced_count']}/{result['total_agents']} 个 Agent")
+    print(f"[Sync] 加载完成: {result['synced_count']}/{result['total_agents']} 个 Agent")
+    if result.get("message"):
+        print(f"[Sync] 提示: {result['message']}")
     return result
 
 
@@ -156,26 +163,47 @@ def get_system_info():
 
 @app.route('/api/agents')
 def list_agents():
-    """List all available agents with their configurations"""
-    agents = finder.get_agent_list()
+    """
+    List all available agents with their configurations
+    
+    从 OpenClaw 配置文件中直接读取 agents.list，
+    显示用户配置文件中实际存在的 agents，不修改任何配置文件
+    """
+    # 从 OpenClaw 配置读取 agents 列表（而不是从文件系统扫描）
+    oc_config = openclaw_config_manager.read_global_config()
+    oc_agent_list = oc_config.get("agents", {}).get("list", [])
+    
+    # 从文件系统获取 agent 信息（用于检查 sessions, avatar 等状态）
+    fs_agents = {a["name"]: a for a in finder.get_agent_list()}
     
     result = []
-    for agent_info in agents:
-        agent_name = agent_info["name"]
-        display_config = config_manager.get_agent_config(agent_name)
+    for agent_entry in oc_agent_list:
+        agent_name = agent_entry.get("id")
+        if not agent_name:
+            continue
         
-        # 读取 OpenClaw 的 metadata
+        # 从 OpenClaw agent entry 获取显示配置
+        identity = agent_entry.get("identity", {})
+        display_config = {
+            "name": identity.get("name", agent_name),
+            "role": identity.get("role", "Agent"),
+            "emoji": identity.get("emoji", "🤖"),
+            "color": identity.get("color", "cyan"),
+            "description": identity.get("description", ""),
+        }
+        
+        # 读取 OpenClaw 的 metadata（如果存在）
         metadata = openclaw_config_manager.read_agent_metadata(agent_name)
-        
-        # 合并配置：metadata 优先
         if metadata:
-            display_config = {
-                "name": metadata.get("display_name", display_config.get("name", agent_name)),
-                "role": metadata.get("role", display_config.get("role", "Agent")),
-                "emoji": metadata.get("emoji", display_config.get("emoji", "🤖")),
-                "color": metadata.get("color", display_config.get("color", "cyan")),
-                "description": metadata.get("description", display_config.get("description", "")),
-            }
+            # metadata 优先
+            display_config["name"] = metadata.get("display_name", display_config["name"])
+            display_config["role"] = metadata.get("role", display_config["role"])
+            display_config["emoji"] = metadata.get("emoji", display_config["emoji"])
+            display_config["color"] = metadata.get("color", display_config["color"])
+            display_config["description"] = metadata.get("description", display_config["description"])
+        
+        # 获取文件系统的 agent 信息
+        fs_info = fs_agents.get(agent_name, {})
         
         # 检查是否有自定义头像
         custom_avatar_path = AVATAR_DIR / f"{agent_name}.png"
@@ -183,11 +211,13 @@ def list_agents():
         
         result.append({
             "name": agent_name,
-            "has_sessions": agent_info["has_sessions"],
-            "has_avatar": agent_info["has_avatar"] or has_custom_avatar,
-            "has_config": agent_info["has_config"],
+            "has_sessions": fs_info.get("has_sessions", False),
+            "has_avatar": fs_info.get("has_avatar", False) or has_custom_avatar,
+            "has_config": fs_info.get("has_config", False),
             "display": display_config,
-            "metadata": metadata
+            "metadata": metadata,
+            "model": agent_entry.get("model", ""),
+            "subagents": agent_entry.get("subagents", {})
         })
     
     return jsonify(result)
