@@ -150,31 +150,68 @@ class OpenClawSkillsManager:
             path=skill_dir
         )
     
-    def get_all_available_skills(self) -> List[SkillInfo]:
+    def get_all_available_skills(self, global_config: Optional[Dict] = None) -> List[SkillInfo]:
         """
-        获取所有可用技能（内置 + 用户自定义）
+        获取所有可用技能（内置 + 用户自定义 + 全局配置中声明的技能，排除全局禁用的）
         
+        Args:
+            global_config: OpenClaw 全局配置（可选，用于读取 skills.entries）
+            
         Returns:
             SkillInfo 列表
         """
         skills = {}
         
-        # 1. 读取内置技能
+        # 读取全局配置（如果未提供）
+        if global_config is None:
+            try:
+                from openclaw_config import get_openclaw_config_manager
+                manager = get_openclaw_config_manager()
+                global_config = manager.read_global_config()
+            except Exception:
+                global_config = {}
+        
+        # 获取全局技能配置（用于检查是否被全局禁用）
+        global_skills = global_config.get("skills", {}).get("entries", {}) if global_config else {}
+        
+        # 1. 读取内置技能（排除全局禁用的）
         if self.BUILTIN_SKILLS_DIR.exists():
             for skill_dir in self.BUILTIN_SKILLS_DIR.iterdir():
                 if skill_dir.is_dir():
+                    skill_id = skill_dir.name
+                    # 检查是否被全局禁用
+                    if skill_id in global_skills and not global_skills[skill_id].get("enabled", True):
+                        continue  # 跳过全局禁用的技能
                     info = self._get_skill_info_from_dir(skill_dir, "builtin")
                     if info:
                         skills[info.id] = info
         
-        # 2. 读取用户自定义技能
+        # 2. 读取用户自定义技能（排除全局禁用的）
         if self.custom_skills_dir.exists():
             for skill_dir in self.custom_skills_dir.iterdir():
                 if skill_dir.is_dir() or skill_dir.is_symlink():
+                    skill_id = skill_dir.name
+                    # 检查是否被全局禁用
+                    if skill_id in global_skills and not global_skills[skill_id].get("enabled", True):
+                        continue  # 跳过全局禁用的技能
                     info = self._get_skill_info_from_dir(skill_dir, "custom")
                     if info:
                         # 用户技能覆盖内置技能
                         skills[info.id] = info
+        
+        # 3. 添加全局配置中声明但文件系统中没有的技能（只添加启用的）
+        for skill_id, skill_config in global_skills.items():
+            # 只添加全局启用的技能
+            if skill_config.get("enabled", False) and skill_id not in skills:
+                skills[skill_id] = SkillInfo(
+                    id=skill_id,
+                    name=skill_id,
+                    description=f"{skill_id} skill (configured)",
+                    emoji="📦",
+                    source="configured",
+                    path=None,
+                    metadata=skill_config
+                )
         
         return list(skills.values())
     
@@ -269,6 +306,11 @@ class OpenClawSkillsManager:
         """
         获取指定 Agent 已启用的技能
         
+        逻辑：
+        1. 默认所有技能都启用（白名单机制，空列表表示不限制）
+        2. 如果 agent.skills 存在且有内容，则只启用列表中的技能
+        3. 全局 skills.entries 中的 enabled: false 可以禁用特定技能
+        
         Args:
             agent_name: Agent 名称
             global_config: OpenClaw 全局配置（可选，避免重复读取）
@@ -294,20 +336,31 @@ class OpenClawSkillsManager:
                 break
         
         # 获取 agent 特有的技能列表
-        agent_skills = agent_config.get("skills", []) if agent_config else []
+        # 如果 skills 字段不存在（None），表示使用默认（全部启用）
+        # 如果 skills 是空列表 []，也表示全部启用（白名单为空 = 不限制）
+        # 如果 skills 有内容，表示只启用列表中的技能
+        agent_skills_config = agent_config.get("skills") if agent_config else None
+        has_agent_skill_whitelist = agent_skills_config is not None and len(agent_skills_config) > 0
+        agent_skills_set = set(agent_skills_config) if has_agent_skill_whitelist else set()
         
-        # 获取所有可用技能
-        all_skills = self.get_all_available_skills()
+        # 获取所有可用技能（包括配置中声明的）
+        all_skills = self.get_all_available_skills(global_config)
         
         # 构建结果
         result = []
         for skill in all_skills:
-            # 检查是否在 agent 的 skills 列表中
-            is_enabled = skill.id in agent_skills
+            # 默认启用所有技能
+            is_enabled = True
             
-            # 检查全局是否启用（如果 agent 没有单独配置）
-            if not is_enabled and skill.id in global_skills:
-                is_enabled = global_skills[skill.id].get("enabled", False)
+            # 如果 agent 配置了 skills 白名单（非空列表），则只启用白名单中的技能
+            if has_agent_skill_whitelist:
+                is_enabled = skill.id in agent_skills_set
+            
+            # 全局配置可以覆盖：如果全局禁用，则 agent 也不能启用
+            if skill.id in global_skills:
+                global_enabled = global_skills[skill.id].get("enabled", True)
+                if not global_enabled:
+                    is_enabled = False
             
             result.append({
                 **skill.to_dict(),
@@ -320,6 +373,10 @@ class OpenClawSkillsManager:
                                global_config: Optional[Dict] = None) -> Tuple[bool, str]:
         """
         为指定 Agent 启用技能
+        
+        逻辑：
+        - 如果 agent 没有 skills 字段 → 所有技能已启用，无需操作
+        - 如果 agent 有 skills 字段 → 将技能加入白名单
         
         Args:
             agent_name: Agent 名称
@@ -349,9 +406,10 @@ class OpenClawSkillsManager:
             if not target_agent:
                 return False, f"Agent '{agent_name}' 不存在"
             
-            # 确保 skills 字段存在
+            # 检查 skills 字段是否存在
             if "skills" not in target_agent:
-                target_agent["skills"] = []
+                # 所有技能已启用，无需操作
+                return True, f"技能 '{skill_id}' 已在 Agent '{agent_name}' 中启用（默认全部启用）"
             
             # 检查是否已启用
             if skill_id in target_agent["skills"]:
@@ -372,7 +430,11 @@ class OpenClawSkillsManager:
     def disable_skill_for_agent(self, agent_name: str, skill_id: str,
                                 global_config: Optional[Dict] = None) -> Tuple[bool, str]:
         """
-        为指定 Agent 禁用技能
+        为指定 Agent 禁用技能（黑名单机制）
+        
+        逻辑：
+        - 如果 agent 没有 skills 字段 → 创建白名单，包含所有技能除了要禁用的
+        - 如果 agent 有 skills 字段 → 从白名单中移除该技能
         
         Args:
             agent_name: Agent 名称
@@ -402,15 +464,20 @@ class OpenClawSkillsManager:
             if not target_agent:
                 return False, f"Agent '{agent_name}' 不存在"
             
+            # 获取所有可用技能
+            all_skills = self.get_all_available_skills(config)
+            all_skill_ids = {s.id for s in all_skills}
+            
             # 检查 skills 字段
             if "skills" not in target_agent:
-                return True, f"技能 '{skill_id}' 未在 Agent '{agent_name}' 中启用"
-            
-            # 从 skills 列表中移除
-            if skill_id not in target_agent["skills"]:
-                return True, f"技能 '{skill_id}' 未在 Agent '{agent_name}' 中启用"
-            
-            target_agent["skills"].remove(skill_id)
+                # 默认全部启用，现在要禁用一个，需要创建白名单（除要禁用的外全部加入）
+                target_agent["skills"] = [sid for sid in all_skill_ids if sid != skill_id]
+            else:
+                # 已经在白名单模式，直接移除该技能
+                if skill_id in target_agent["skills"]:
+                    target_agent["skills"].remove(skill_id)
+                else:
+                    return True, f"技能 '{skill_id}' 已在 Agent '{agent_name}' 中禁用"
             
             # 写入配置
             if manager.write_global_config(config):

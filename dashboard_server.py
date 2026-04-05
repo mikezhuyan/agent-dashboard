@@ -743,9 +743,10 @@ def print_startup_info():
 
 @app.route('/api/skills')
 def list_skills():
-    """获取所有可用技能列表"""
+    """获取所有可用技能列表（包括配置中声明的）"""
     try:
-        skills = skills_manager.get_all_available_skills()
+        config = openclaw_config_manager.read_global_config()
+        skills = skills_manager.get_all_available_skills(config)
         return jsonify({
             "success": True,
             "skills": [skill.to_dict() for skill in skills]

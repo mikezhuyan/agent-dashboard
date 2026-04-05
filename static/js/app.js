@@ -207,6 +207,45 @@ const api = {
             body: JSON.stringify({ agentToRemove })
         });
         return response.json();
+    },
+    
+    // Skills API
+    async getSkills() {
+        const response = await fetch('/api/skills');
+        return response.json();
+    },
+    
+    async getSkillDetail(skillId) {
+        const response = await fetch(`/api/skills/${skillId}`);
+        return response.json();
+    },
+    
+    async getAgentSkills(agentName) {
+        const response = await fetch(`/api/agents/${agentName}/skills`);
+        return response.json();
+    },
+    
+    async enableAgentSkill(agentName, skillId) {
+        const response = await fetch(`/api/agents/${agentName}/skills/${skillId}/enable`, {
+            method: 'POST'
+        });
+        return response.json();
+    },
+    
+    async disableAgentSkill(agentName, skillId) {
+        const response = await fetch(`/api/agents/${agentName}/skills/${skillId}/disable`, {
+            method: 'POST'
+        });
+        return response.json();
+    },
+    
+    async installSkill(agentName, skillId) {
+        const response = await fetch(`/api/agents/${agentName}/skills/install`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ skillId })
+        });
+        return response.json();
     }
 };
 
@@ -511,6 +550,13 @@ let renderAgentCards = () => {
                     <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
                 </svg>
                 <span class="work-check-tooltip">对话</span>
+            </button>
+            
+            <!-- Skills Button -->
+            <button class="agent-skills-btn" 
+                    onclick="event.stopPropagation(); openSkillsManager('${agent.name}')"
+                    title="管理技能">
+                🛠️
             </button>
             
             <!-- Quick Stats -->
@@ -1449,5 +1495,277 @@ window.addToAllowAgents = async (targetAgent, agentToAdd) => {
     } catch (e) {
         console.error(`Failed to add ${agentToAdd} to ${targetAgent}'s allowAgents:`, e);
         return false;
+    }
+};
+
+// ========================================
+// Skills Management Functions
+// ========================================
+
+// State for skills management
+let skillsState = {
+    currentAgent: null,
+    allSkills: [],
+    agentSkills: [],
+    activeTab: 'enabled' // 'enabled', 'available'
+};
+
+// Open skills manager modal
+window.openSkillsManager = async (agentName) => {
+    skillsState.currentAgent = agentName;
+    skillsState.activeTab = 'enabled';
+    
+    // Load agent info
+    const agent = state.agents.find(a => a.name === agentName);
+    if (!agent) {
+        showNotification('Agent not found', 'error');
+        return;
+    }
+    
+    // Load skills data
+    await loadSkillsData(agentName);
+    
+    // Render modal
+    renderSkillsModal(agent);
+    
+    // Show modal
+    document.getElementById('skillsModal').classList.add('active');
+};
+
+// Close skills manager modal
+window.closeSkillsManager = () => {
+    document.getElementById('skillsModal').classList.remove('active');
+    skillsState.currentAgent = null;
+};
+
+// Load skills data from API
+const loadSkillsData = async (agentName) => {
+    try {
+        // Load both in parallel
+        const [allSkillsRes, agentSkillsRes] = await Promise.all([
+            fetch('/api/skills'),
+            fetch(`/api/agents/${agentName}/skills`)
+        ]);
+        
+        const [allSkillsData, agentSkillsData] = await Promise.all([
+            allSkillsRes.json(),
+            agentSkillsRes.json()
+        ]);
+        
+        if (allSkillsData.success) {
+            skillsState.allSkills = allSkillsData.skills;
+        }
+        
+        if (agentSkillsData.success) {
+            skillsState.agentSkills = agentSkillsData.skills;
+        }
+        
+        // Ensure data is loaded before proceeding
+        if (!skillsState.agentSkills) {
+            skillsState.agentSkills = [];
+        }
+    } catch (e) {
+        console.error('Failed to load skills:', e);
+        skillsState.agentSkills = [];
+        showNotification('加载技能失败', 'error');
+    }
+};
+
+// Render skills modal
+const renderSkillsModal = (agent) => {
+    const modalBody = document.getElementById('skillsModalBody');
+    const display = agent.display;
+    
+    const enabledSkills = skillsState.agentSkills.filter(s => s.enabled);
+    const availableSkills = skillsState.agentSkills.filter(s => !s.enabled);
+    
+    modalBody.innerHTML = `
+        <div class="skills-header">
+            <div class="skills-agent-info">
+                <div class="skills-agent-avatar" style="background: linear-gradient(135deg, var(--accent-${display.color === 'main' ? 'purple' : display.color === 'coder' ? 'cyan' : display.color === 'brainstorm' ? 'pink' : display.color === 'writer' ? 'green' : display.color === 'investor' ? 'orange' : 'cyan'}), var(--accent-purple));">
+                    ${display.emoji}
+                </div>
+                <div>
+                    <div class="skills-agent-name">${display.name}</div>
+                    <div class="skills-agent-meta">已启用 ${enabledSkills.length} 个技能 · 共 ${skillsState.allSkills.length} 个可用</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="skills-tabs">
+            <button class="skills-tab ${skillsState.activeTab === 'enabled' ? 'active' : ''}" onclick="switchSkillsTab('enabled')">
+                <span>已启用</span>
+                <span class="tab-count">${enabledSkills.length}</span>
+            </button>
+            <button class="skills-tab ${skillsState.activeTab === 'available' ? 'active' : ''}" onclick="switchSkillsTab('available')">
+                <span>可用技能</span>
+                <span class="tab-count">${availableSkills.length}</span>
+            </button>
+        </div>
+        
+        <div class="skills-content">
+            <div class="skills-panel ${skillsState.activeTab === 'enabled' ? 'active' : ''}" id="enabledSkillsPanel">
+                ${enabledSkills.length === 0 ? `
+                    <div class="skills-empty">
+                        <div class="skills-empty-icon">🛠️</div>
+                        <h4>暂无已启用的技能</h4>
+                        <p>切换到"可用技能"标签添加技能</p>
+                    </div>
+                ` : `
+                    <div class="skills-grid">
+                        ${enabledSkills.map(skill => renderSkillCard(skill, true)).join('')}
+                    </div>
+                `}
+            </div>
+            
+            <div class="skills-panel ${skillsState.activeTab === 'available' ? 'active' : ''}" id="availableSkillsPanel">
+                ${availableSkills.length === 0 ? `
+                    <div class="skills-empty">
+                        <div class="skills-empty-icon">✨</div>
+                        <h4>所有技能已启用</h4>
+                        <p>该 Agent 已启用所有可用技能</p>
+                    </div>
+                ` : `
+                    <div class="skills-grid">
+                        ${availableSkills.map(skill => renderSkillCard(skill, false)).join('')}
+                    </div>
+                `}
+            </div>
+        </div>
+    `;
+};
+
+// Render single skill card
+const renderSkillCard = (skill, enabled) => {
+    return `
+        <div class="skill-card ${enabled ? 'enabled' : ''}" onclick="toggleSkill('${skill.id}', ${!enabled})" title="${enabled ? '点击禁用' : '点击启用'}">
+            <div class="skill-checkbox"></div>
+            <div class="skill-icon">${skill.emoji}</div>
+            <div class="skill-info">
+                <div class="skill-name">${skill.name}</div>
+                <div class="skill-desc">${skill.description || 'No description'}</div>
+            </div>
+            <span class="skill-source ${skill.source}">${skill.source === 'builtin' ? '内置' : '自定义'}</span>
+        </div>
+    `;
+};
+
+// Switch skills tab
+window.switchSkillsTab = (tab) => {
+    skillsState.activeTab = tab;
+    
+    // Update tab buttons
+    document.querySelectorAll('.skills-tab').forEach(t => t.classList.remove('active'));
+    event.target.closest('.skills-tab').classList.add('active');
+    
+    // Update panels
+    document.querySelectorAll('.skills-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById(tab === 'enabled' ? 'enabledSkillsPanel' : 'availableSkillsPanel').classList.add('active');
+};
+
+// Toggle skill enable/disable
+window.toggleSkill = async (skillId, enable) => {
+    if (!skillsState.currentAgent) return;
+    
+    try {
+        const url = `/api/agents/${skillsState.currentAgent}/skills/${skillId}/${enable ? 'enable' : 'disable'}`;
+        const response = await fetch(url, { method: 'POST' });
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification(result.message, 'success');
+            // Reload skills data and re-render
+            await loadSkillsData(skillsState.currentAgent);
+            const agent = state.agents.find(a => a.name === skillsState.currentAgent);
+            renderSkillsModal(agent);
+        } else {
+            showNotification(result.error || '操作失败', 'error');
+        }
+    } catch (e) {
+        console.error('Failed to toggle skill:', e);
+        showNotification('操作失败', 'error');
+    }
+};
+
+// Open skill detail modal
+window.openSkillDetail = async (skillId) => {
+    try {
+        const response = await fetch(`/api/skills/${skillId}`);
+        const data = await response.json();
+        
+        if (!data.success || !data.skill) {
+            showNotification('技能详情加载失败', 'error');
+            return;
+        }
+        
+        const skill = data.skill;
+        const modalBody = document.getElementById('skillDetailBody');
+        
+        // Convert markdown-like content to HTML (basic)
+        let contentHtml = skill.content || '暂无详细说明';
+        // Simple markdown to HTML conversion
+        contentHtml = contentHtml
+            .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+            .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+            .replace(/`([^`]+)`/g, '<code>$1</code>')
+            .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+            .replace(/\n\n/g, '</p><p>')
+            .replace(/\n/g, '<br>');
+        
+        modalBody.innerHTML = `
+            <button class="skill-detail-back" onclick="closeSkillDetail()">
+                <span>←</span> 返回
+            </button>
+            <div class="skill-detail-header">
+                <div class="skill-detail-icon">${skill.emoji}</div>
+                <div class="skill-detail-info">
+                    <h3>${skill.name}</h3>
+                    <p>${skill.description}</p>
+                </div>
+            </div>
+            <div class="skill-detail-content">
+                <p>${contentHtml}</p>
+            </div>
+        `;
+        
+        document.getElementById('skillDetailTitle').textContent = skill.name;
+        document.getElementById('skillDetailModal').classList.add('active');
+    } catch (e) {
+        console.error('Failed to load skill detail:', e);
+        showNotification('加载技能详情失败', 'error');
+    }
+};
+
+// Close skill detail modal
+window.closeSkillDetail = () => {
+    document.getElementById('skillDetailModal').classList.remove('active');
+};
+
+// Install new skill
+window.installSkill = async (skillId) => {
+    if (!skillsState.currentAgent) return;
+    
+    try {
+        const response = await fetch(`/api/agents/${skillsState.currentAgent}/skills/install`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ skillId })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification(result.message, 'success');
+            // Reload skills data
+            await loadSkillsData(skillsState.currentAgent);
+            const agent = state.agents.find(a => a.name === skillsState.currentAgent);
+            renderSkillsModal(agent);
+        } else {
+            showNotification(result.error || '安装失败', 'error');
+        }
+    } catch (e) {
+        console.error('Failed to install skill:', e);
+        showNotification('安装失败', 'error');
     }
 };

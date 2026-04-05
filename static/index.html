@@ -76,6 +76,32 @@
         </div>
     </div>
 
+    <!-- Skills Manager Modal -->
+    <div class="modal-overlay" id="skillsModal">
+        <div class="modal skills-modal">
+            <div class="modal-header">
+                <h3 class="modal-title">🛠️ Agent 技能管理</h3>
+                <button class="modal-close" onclick="closeSkillsManager()">✕</button>
+            </div>
+            <div class="modal-body" id="skillsModalBody">
+                <!-- 动态生成技能管理内容 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Skill Detail Modal -->
+    <div class="modal-overlay" id="skillDetailModal">
+        <div class="modal skills-modal">
+            <div class="modal-header">
+                <h3 class="modal-title" id="skillDetailTitle">技能详情</h3>
+                <button class="modal-close" onclick="closeSkillDetail()">✕</button>
+            </div>
+            <div class="modal-body" id="skillDetailBody">
+                <!-- 动态生成技能详情 -->
+            </div>
+        </div>
+    </div>
+
     <div class="main-content" id="mainContent">
         <header>
             <div class="header-top">
