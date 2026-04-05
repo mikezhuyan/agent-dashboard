@@ -216,16 +216,76 @@ h1 {
     margin-top: 10px;
 }
 
+.datetime-weather {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+    margin-top: 15px;
+}
+
 .current-date {
     color: var(--accent-cyan);
     font-size: 1.2rem;
     font-weight: 600;
-    margin-top: 15px;
     padding: 8px 20px;
     background: rgba(0, 212, 255, 0.1);
     border-radius: 20px;
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
     border: 1px solid rgba(0, 212, 255, 0.3);
+}
+
+.current-time {
+    color: var(--accent-purple);
+    font-family: 'Courier New', monospace;
+    letter-spacing: 1px;
+}
+
+.weather-info {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: rgba(255, 193, 7, 0.1);
+    border-radius: 20px;
+    border: 1px solid rgba(255, 193, 7, 0.3);
+    color: #ffc107;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.weather-info:hover {
+    background: rgba(255, 193, 7, 0.2);
+    transform: translateY(-2px);
+}
+
+.weather-loading {
+    opacity: 0.7;
+    font-size: 0.9rem;
+}
+
+.weather-icon {
+    font-size: 1.3rem;
+}
+
+.weather-temp {
+    font-weight: 600;
+}
+
+.weather-city {
+    opacity: 0.9;
+    font-size: 0.9rem;
+}
+
+.weather-error {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    cursor: help;
 }
 
 /* Settings Button */

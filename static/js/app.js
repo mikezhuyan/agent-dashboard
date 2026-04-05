@@ -262,6 +262,9 @@ const createParticles = () => {
     }
 };
 
+// 时间、日期和天气更新
+let weatherUpdateInterval = null;
+
 const updateCurrentDate = () => {
     const now = new Date();
     const year = now.getFullYear();
@@ -269,7 +272,188 @@ const updateCurrentDate = () => {
     const day = now.getDate();
     const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
     const weekday = weekdays[now.getDay()];
-    document.getElementById('currentDate').textContent = `${year}年${month}月${day}日 ${weekday}`;
+    
+    // 格式化时间 HH:MM:SS
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+    
+    const dateEl = document.getElementById('currentDate');
+    dateEl.innerHTML = `${year}年${month}月${day}日 ${weekday} <span class="current-time">${hours}:${minutes}:${seconds}</span>`;
+};
+
+// 获取天气信息
+const fetchWeather = async (lat, lon, cityName = null) => {
+    try {
+        // 使用 wttr.in 免费天气服务
+        const location = cityName || `${lat},${lon}`;
+        const response = await fetch(`https://wttr.in/${encodeURIComponent(location)}?format=%c+%t+%C+%l`, {
+            mode: 'cors'
+        }).catch(() => null);
+        
+        if (response && response.ok) {
+            const text = await response.text();
+            return parseWeatherData(text);
+        }
+        
+        // 如果 wttr.in 失败，使用 Open-Meteo（免费，无需 key）
+        return await fetchOpenMeteo(lat, lon, cityName);
+    } catch (e) {
+        console.error('获取天气失败:', e);
+        return null;
+    }
+};
+
+// 解析 wttr.in 返回的数据
+const parseWeatherData = (text) => {
+    // wttr.in 格式: ☀️ +25°C Sunny Shenzhen, China
+    const parts = text.trim().split(' ');
+    if (parts.length >= 3) {
+        const icon = parts[0];
+        const temp = parts[1];
+        const condition = parts[2];
+        const location = parts.slice(3).join(' ') || '本地';
+        return { icon, temp, condition, location };
+    }
+    return null;
+};
+
+// 使用 Open-Meteo 获取天气（备选）
+const fetchOpenMeteo = async (lat, lon, cityName) => {
+    try {
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code&timezone=auto`;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Weather API failed');
+        
+        const data = await response.json();
+        const temp = `${data.current.temperature_2m}°C`;
+        const weatherCode = data.current.weather_code;
+        const { icon, condition } = getWeatherIconAndCondition(weatherCode);
+        
+        return {
+            icon,
+            temp,
+            condition,
+            location: cityName || `${lat.toFixed(2)}, ${lon.toFixed(2)}`
+        };
+    } catch (e) {
+        console.error('Open-Meteo 失败:', e);
+        return null;
+    }
+};
+
+// WMO Weather interpretation codes
+const getWeatherIconAndCondition = (code) => {
+    const weatherMap = {
+        0: { icon: '☀️', condition: '晴朗' },
+        1: { icon: '🌤️', condition: '多云' },
+        2: { icon: '⛅', condition: '多云' },
+        3: { icon: '☁️', condition: '阴天' },
+        45: { icon: '🌫️', condition: '雾' },
+        48: { icon: '🌫️', condition: '雾' },
+        51: { icon: '🌦️', condition: '毛毛雨' },
+        53: { icon: '🌦️', condition: '小雨' },
+        55: { icon: '🌧️', condition: '中雨' },
+        61: { icon: '🌧️', condition: '小雨' },
+        63: { icon: '🌧️', condition: '中雨' },
+        65: { icon: '⛈️', condition: '大雨' },
+        71: { icon: '🌨️', condition: '小雪' },
+        73: { icon: '🌨️', condition: '中雪' },
+        75: { icon: '❄️', condition: '大雪' },
+        95: { icon: '⛈️', condition: '雷雨' },
+    };
+    return weatherMap[code] || { icon: '🌡️', condition: '未知' };
+};
+
+// 通过 IP 获取位置
+const getLocationByIP = async () => {
+    try {
+        const response = await fetch('https://ipapi.co/json/');
+        if (!response.ok) throw new Error('IP geolocation failed');
+        const data = await response.json();
+        return {
+            lat: data.latitude,
+            lon: data.longitude,
+            city: data.city,
+            country: data.country_name
+        };
+    } catch (e) {
+        console.error('IP 定位失败:', e);
+        return null;
+    }
+};
+
+// 更新天气显示
+const updateWeatherDisplay = async () => {
+    const weatherEl = document.getElementById('weatherInfo');
+    if (!weatherEl) return;
+    
+    // 尝试浏览器 Geolocation
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            async (position) => {
+                const { latitude, longitude } = position.coords;
+                const weather = await fetchWeather(latitude, longitude);
+                renderWeather(weather);
+            },
+            async () => {
+                // Geolocation 失败，使用 IP 定位
+                const location = await getLocationByIP();
+                if (location) {
+                    const weather = await fetchWeather(location.lat, location.lon, location.city);
+                    renderWeather(weather);
+                } else {
+                    renderWeather(null, '无法获取位置');
+                }
+            }
+        );
+    } else {
+        // 浏览器不支持 Geolocation，使用 IP 定位
+        const location = await getLocationByIP();
+        if (location) {
+            const weather = await fetchWeather(location.lat, location.lon, location.city);
+            renderWeather(weather);
+        } else {
+            renderWeather(null, '无法获取位置');
+        }
+    }
+};
+
+// 渲染天气信息
+const renderWeather = (weather, error = null) => {
+    const weatherEl = document.getElementById('weatherInfo');
+    if (!weatherEl) return;
+    
+    if (error) {
+        weatherEl.innerHTML = `<span class="weather-error" title="${error}">🌡️ --</span>`;
+        return;
+    }
+    
+    if (!weather) {
+        weatherEl.innerHTML = '<span class="weather-error">🌡️ --</span>';
+        return;
+    }
+    
+    weatherEl.innerHTML = `
+        <span class="weather-icon">${weather.icon}</span>
+        <span class="weather-temp">${weather.temp}</span>
+        <span class="weather-city">${weather.location}</span>
+    `;
+    weatherEl.title = weather.condition || '点击查看详情';
+};
+
+// 启动时间和天气更新
+const startDateTimeWeatherUpdate = () => {
+    // 立即更新一次
+    updateCurrentDate();
+    updateWeatherDisplay();
+    
+    // 每秒更新时间
+    setInterval(updateCurrentDate, 1000);
+    
+    // 每 10 分钟更新一次天气
+    if (weatherUpdateInterval) clearInterval(weatherUpdateInterval);
+    weatherUpdateInterval = setInterval(updateWeatherDisplay, 10 * 60 * 1000);
 };
 
 const renderStats = (stats) => {
@@ -915,7 +1099,7 @@ const startAutoRefresh = () => {
 // Initialization
 document.addEventListener('DOMContentLoaded', async () => {
     createParticles();
-    updateCurrentDate();
+    startDateTimeWeatherUpdate();
     
     // Initial data load
     const success = await loadData();
