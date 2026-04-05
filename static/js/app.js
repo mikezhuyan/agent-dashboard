@@ -383,6 +383,23 @@ const getLocationByIP = async () => {
     }
 };
 
+// 反向地理编码：经纬度转城市名
+const reverseGeocode = async (lat, lon) => {
+    try {
+        // 使用 BigDataCloud 免费反向地理编码 API（无需 key，有速率限制）
+        const url = `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=zh`;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Reverse geocoding failed');
+        
+        const data = await response.json();
+        // 优先返回城市名，如果没有则返回区/县，最后返回省份
+        return data.city || data.locality || data.principalSubdivision || null;
+    } catch (e) {
+        console.error('反向地理编码失败:', e);
+        return null;
+    }
+};
+
 // 更新天气显示
 const updateWeatherDisplay = async () => {
     const weatherEl = document.getElementById('weatherInfo');
@@ -393,7 +410,9 @@ const updateWeatherDisplay = async () => {
         navigator.geolocation.getCurrentPosition(
             async (position) => {
                 const { latitude, longitude } = position.coords;
-                const weather = await fetchWeather(latitude, longitude);
+                // 通过反向地理编码获取城市名
+                const cityName = await reverseGeocode(latitude, longitude);
+                const weather = await fetchWeather(latitude, longitude, cityName);
                 renderWeather(weather);
             },
             async () => {
