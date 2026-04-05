@@ -455,8 +455,8 @@ const renderWeather = (weather, error = null) => {
     
     weatherEl.innerHTML = `
         <span class="weather-icon">${weather.icon}</span>
-        <span class="weather-temp">${weather.temp}</span>
         <span class="weather-city">${weather.location}</span>
+        <span class="weather-temp">${weather.temp}</span>
     `;
     weatherEl.title = weather.condition || '点击查看详情';
 };
